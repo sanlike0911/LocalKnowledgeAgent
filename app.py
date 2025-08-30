@@ -29,6 +29,7 @@ from src.exceptions.base_exceptions import (
     LocalKnowledgeAgentError, create_error_handler, ErrorMessages
 )
 from src.utils.structured_logger import setup_logging
+from src.utils.monitoring_integration import initialize_monitoring, log_performance, log_error
 
 
 class LocalKnowledgeAgentApp:
@@ -40,6 +41,9 @@ class LocalKnowledgeAgentApp:
     
     def __init__(self):
         """アプリケーションを初期化"""
+        # 統合監視システムを初期化
+        self.monitoring = initialize_monitoring()
+        
         self.logger = setup_logging()
         self.navigation = Navigation()
         
@@ -49,26 +53,30 @@ class LocalKnowledgeAgentApp:
     def _initialize_services(self) -> None:
         """サービス層の初期化"""
         try:
-            # 設定管理
-            self.config_manager = ConfigManager()
-            
-            # インデックス管理
-            self.indexer = ChromaDBIndexer()
-            
-            # QA サービス
-            self.qa_service = QAService(
-                indexer=self.indexer
-            )
-            
-            # UI コンポーネント
-            self.main_view = MainView()
-            
-            self.settings_view = SettingsView(
-                config_interface=self.config_manager,
-                indexing_interface=self.indexer
-            )
+            with log_performance("app_initialization"):
+                # 設定管理
+                self.config_manager = ConfigManager()
+                
+                # インデックス管理
+                self.indexer = ChromaDBIndexer()
+                
+                # QA サービス
+                self.qa_service = QAService(
+                    indexer=self.indexer
+                )
+                
+                # UI コンポーネント
+                self.main_view = MainView()
+                
+                self.settings_view = SettingsView(
+                    config_interface=self.config_manager,
+                    indexing_interface=self.indexer
+                )
+                
+                self.logger.info("全サービス初期化完了")
             
         except Exception as e:
+            log_error(e, context={"phase": "service_initialization"}, user_impact="critical")
             self.logger.error(f"サービス初期化エラー: {e}")
             st.error(f"アプリケーションの初期化に失敗しました: {str(e)}")
             st.stop()

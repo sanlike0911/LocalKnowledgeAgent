@@ -18,6 +18,7 @@ from src.logic.indexing import ChromaDBIndexer
 from src.utils.structured_logger import get_logger
 from src.utils.progress_utils import ProgressTracker, should_show_progress
 from src.utils.cancellation_utils import CancellableOperation
+from src.utils.performance_monitor import measure_function
 
 
 @dataclass
@@ -593,6 +594,7 @@ class RAGPipeline(CancellableOperation):
         """
         return self.qa_engine.generate_response(prompt)
     
+    @measure_function("rag_pipeline_answer_question")
     def answer_question(
         self,
         query: str,
@@ -861,6 +863,7 @@ class QAService:
             "max_context_length": max_context_length
         })
     
+    @measure_function("qa_service_ask_question")
     def ask_question(
         self,
         query: str,
