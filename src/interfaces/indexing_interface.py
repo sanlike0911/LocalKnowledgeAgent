@@ -45,6 +45,22 @@ class IndexingInterface(ABC):
         if not validation_result["is_valid"]:
             raise IndexingError(f"設定が無効です: {', '.join(validation_result['errors'])}")
     
+    @abstractmethod
+    def rebuild_index_from_folders(self, folder_paths: List[str]) -> bool:
+        """
+        指定されたフォルダパスから文書を読み込み、インデックスを再構築します。
+
+        Args:
+            folder_paths: インデックス化するフォルダのパスリスト
+
+        Returns:
+            bool: 成功した場合True
+
+        Raises:
+            IndexingError: インデックス再構築に失敗した場合
+        """
+        pass
+
     def create_index(self, documents: List[Document]) -> bool:
         """
         文書リストからインデックスを作成

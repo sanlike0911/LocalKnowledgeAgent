@@ -820,3 +820,148 @@ class RAGPipeline(CancellableOperation):
             health_status['error'] = str(e)
             
         return health_status
+
+
+class QAService:
+    """
+    QAサービス (アプリケーションレイヤー)
+    
+    RAGPipelineのラッパーとして動作し、アプリケーション層に
+    統一されたQAインターフェースを提供する
+    """
+    
+    def __init__(
+        self,
+        indexer: ChromaDBIndexer,
+        model_name: str = "llama3.1:8b",
+        max_context_length: int = 4000
+    ):
+        """
+        QAサービスを初期化
+        
+        Args:
+            indexer: ChromaDBインデクサー
+            model_name: 使用するOllamaモデル名
+            max_context_length: 最大コンテキスト長
+        """
+        self.indexer = indexer
+        self.model_name = model_name
+        self.max_context_length = max_context_length
+        self.logger = get_logger(__name__)
+        
+        # RAGPipelineを内部で使用
+        self.rag_pipeline = RAGPipeline(
+            indexer=indexer,
+            model_name=model_name,
+            max_context_length=max_context_length
+        )
+        
+        self.logger.info(f"QAサービス初期化完了", extra={
+            "model_name": model_name,
+            "max_context_length": max_context_length
+        })
+    
+    def ask_question(
+        self,
+        query: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        top_k: int = 5,
+        min_similarity_threshold: float = 0.0
+    ) -> Dict[str, Any]:
+        """
+        質問に対する回答を生成
+        
+        Args:
+            query: ユーザー質問
+            conversation_history: 会話履歴
+            top_k: 検索上位K件
+            min_similarity_threshold: 最小類似度閾値
+            
+        Returns:
+            Dict[str, Any]: QA結果
+            
+        Raises:
+            QAError: 回答生成エラー
+        """
+        try:
+            return self.rag_pipeline.answer_question(
+                query=query,
+                conversation_history=conversation_history,
+                top_k=top_k,
+                min_similarity_threshold=min_similarity_threshold
+            )
+        except QAError:
+            # QAErrorはそのまま再発生
+            raise
+    
+    def ask_question_stream(
+        self,
+        query: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        top_k: int = 5
+    ) -> Iterator[Dict[str, Any]]:
+        """
+        ストリーミング形式で質問に回答
+        
+        Args:
+            query: ユーザー質問
+            conversation_history: 会話履歴
+            top_k: 検索上位K件
+            
+        Yields:
+            Dict[str, Any]: ストリーミング結果
+        """
+        try:
+            yield from self.rag_pipeline.answer_question_stream(
+                query=query,
+                conversation_history=conversation_history,
+                top_k=top_k
+            )
+        except QAError:
+            # QAErrorはそのまま再発生
+            raise
+    
+    def search_documents(
+        self,
+        query: str,
+        top_k: int = 5,
+        min_similarity_threshold: float = 0.0
+    ) -> List[Dict[str, Any]]:
+        """
+        関連文書を検索
+        
+        Args:
+            query: 検索クエリ
+            top_k: 上位K件を取得
+            min_similarity_threshold: 最小類似度閾値
+            
+        Returns:
+            List[Dict[str, Any]]: 検索結果リスト
+            
+        Raises:
+            QAError: 検索エラー
+        """
+        try:
+            return self.rag_pipeline.search_relevant_documents(
+                query=query,
+                top_k=top_k,
+                min_similarity_threshold=min_similarity_threshold
+            )
+        except QAError:
+            # QAErrorはそのまま再発生
+            raise
+    
+    def check_system_health(self) -> Dict[str, Any]:
+        """
+        システムの健康状態をチェック
+        
+        Returns:
+            Dict[str, Any]: システム状態情報
+        """
+        return self.rag_pipeline.check_system_health()
+    
+    def cancel(self) -> None:
+        """
+        現在実行中の操作をキャンセル
+        """
+        self.rag_pipeline.cancel()

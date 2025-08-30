@@ -640,3 +640,73 @@ class ChromaDBIndexer(CancellableOperation):
                 "embedding_model": self.embedding_model,
                 "error": str(e)
             }
+    
+    def rebuild_index_from_folders(self, folder_paths: List[str]) -> bool:
+        """
+        指定されたフォルダパスから文書を読み込み、インデックスを再構築します。
+
+        Args:
+            folder_paths: インデックス化するフォルダのパスリスト
+
+        Returns:
+            bool: 成功した場合True
+
+        Raises:
+            IndexingError: インデックス再構築に失敗した場合
+        """
+        self.logger.info(f"フォルダからインデックス再構築開始: {folder_paths}")
+        try:
+            self.clear_collection() # 既存のインデックスをクリア
+
+            total_files_to_process = 0
+            for folder_path_str in folder_paths:
+                folder_path = Path(folder_path_str)
+                if folder_path.is_dir():
+                    # サポート対象ファイルを収集 (rebuild_from_directoryと同じロジック)
+                    supported_extensions = ['*.pdf', '*.txt']
+                    for ext in supported_extensions:
+                        total_files_to_process += len(list(folder_path.glob(f"**/{ext}")))
+                else:
+                    self.logger.warning(f"指定されたパスはディレクトリではありません: {folder_path_str}")
+
+            if total_files_to_process == 0:
+                self.logger.info("処理対象ファイルが見つかりませんでした。")
+                return True
+
+            progress_tracker = ProgressTracker(
+                total=total_files_to_process,
+                description="フォルダからインデックスを再構築中"
+            )
+
+            processed_files_count = 0
+            for folder_path_str in folder_paths:
+                folder_path = Path(folder_path_str)
+                if folder_path.is_dir():
+                    self.check_cancellation()
+                    self.logger.info(f"フォルダ処理中: {folder_path_str}")
+                    
+                    # rebuild_from_directoryのロジックをここに統合
+                    supported_extensions = ['*.pdf', '*.txt']
+                    file_paths = []
+                    for ext in supported_extensions:
+                        file_paths.extend(folder_path.glob(f"**/{ext}"))
+
+                    for file_path in file_paths:
+                        self.check_cancellation()
+                        doc = Document.from_file(file_path)
+                        self.add_document(doc) # 個別にドキュメントを追加
+                        processed_files_count += 1
+                        progress_tracker.update(
+                            processed_files_count,
+                            message=f"処理中: {file_path.name} ({processed_files_count}/{total_files_to_process})"
+                        )
+                
+            progress_tracker.finish("インデックス再構築完了")
+            self.logger.info("フォルダからのインデックス再構築完了")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"フォルダからのインデックス再構築エラー: {e}")
+            if 'progress_tracker' in locals() and progress_tracker:
+                progress_tracker.cancel()
+            raise IndexingError(f"フォルダからのインデックス再構築に失敗しました: {e}")

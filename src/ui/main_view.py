@@ -10,7 +10,8 @@ from typing import Dict, Any, List, Optional, Iterator
 from datetime import datetime
 from contextlib import contextmanager
 
-from src.models.chat_history import ChatHistory, ChatMessage
+from src.models.chat_history import ChatHistory
+from src.utils.session_state import ChatMessage
 from src.models.config import Config
 from src.logic.qa import RAGPipeline
 from src.logic.indexing import ChromaDBIndexer
@@ -378,7 +379,7 @@ class MainView(CancellableOperation):
                     qa_result = self.rag_pipeline.answer_question(
                         question,
                         conversation_history=conversation_history,
-                        top_k=self.config.max_search_results
+                        top_k=getattr(self.config, 'max_search_results', 5)
                     )
                     
                     if qa_result:
@@ -451,7 +452,7 @@ class MainView(CancellableOperation):
                     stream = self.rag_pipeline.answer_question_stream(
                         question,
                         conversation_history=conversation_history,
-                        top_k=self.config.max_search_results
+                        top_k=getattr(self.config, 'max_search_results', 5)
                     )
                     
                     for chunk in stream:
@@ -543,9 +544,9 @@ class MainView(CancellableOperation):
             
             config_summary = {
                 "モデル": self.config.ollama_model,
-                "最大検索結果数": self.config.max_search_results,
-                "ストリーミング": "有効" if self.config.enable_streaming else "無効",
-                "言語": self.config.language
+                "最大検索結果数": getattr(self.config, 'max_search_results', 5),
+                "ストリーミング": "有効" if getattr(self.config, 'enable_streaming', True) else "無効",
+                "言語": getattr(self.config, 'language', 'ja')
             }
             
             st.json(config_summary)

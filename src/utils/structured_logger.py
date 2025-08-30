@@ -397,3 +397,14 @@ def log_system_event(event: str, **kwargs) -> None:
 def log_error_with_context(error: Exception, context: Dict[str, Any], **kwargs) -> None:
     """コンテキスト付きエラーログの便利関数"""
     structured_logger.log_error_with_context(error, context, **kwargs)
+
+
+def setup_logging() -> logging.Logger:
+    """
+    構造化ログシステムを初期化する便利関数
+    
+    Returns:
+        logging.Logger: ルートロガー
+    """
+    structured_logger.setup_logging()
+    return logging.getLogger()

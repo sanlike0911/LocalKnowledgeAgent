@@ -11,7 +11,8 @@ import tempfile
 import shutil
 from typing import Dict, Any, List
 
-from src.models.chat_history import ChatHistory, ChatMessage
+from src.models.chat_history import ChatHistory
+from src.utils.session_state import ChatMessage
 from src.models.config import Config
 from src.logic.qa import RAGPipeline
 from src.logic.indexing import ChromaDBIndexer
