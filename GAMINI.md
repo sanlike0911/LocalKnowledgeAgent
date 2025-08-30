@@ -10,9 +10,9 @@
 
 ## システム開発のルール
 
-### CLAUDE.mdの管理
+### GEMINI.mdの管理
 
-- プロジェクトルートに`CLAUDE.md`ファイルを配置し、AI Agentが参照する**知識情報**を記録
+- プロジェクトルートに`GEMINI.md`ファイルを配置し、AI Agentが参照する**知識情報**を記録
 - プロジェクトの概要、アーキテクチャ、依存関係、実行方法は、別ファイル**設計書**(`docs/design-specification.md`)を参照
 - 本ファイルは、最新の変更に合わせて継続的に更新（バージョン管理必須）
 
@@ -31,7 +31,7 @@
 
   ```text
   project/
-  ├── CLAUDE.md                    # AI Agent用の指示書
+  ├── GEMINI.md                    # AI Agent用の指示書
   ├── README.md                    # プロジェクト説明
   ├── requirements.txt             # 依存関係（Python）
   ├── pyproject.toml               # プロジェクト設定（Poetry使用時）

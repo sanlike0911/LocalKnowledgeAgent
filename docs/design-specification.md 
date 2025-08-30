@@ -64,7 +64,7 @@ graph TD
         subgraph LLM実行環境 (LLM Runtime)
             F[LLM (Ollama)];
         end
-        
+
         subgraph データストア層 (Data Stores)
             E[ベクトルDB<br>ChromaDB];
             G[文書ファイル<br>PDF, TXT];

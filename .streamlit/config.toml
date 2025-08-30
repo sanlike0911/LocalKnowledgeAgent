@@ -1,0 +1,68 @@
+[global]
+
+# If false, the file watcher will not watch files.
+developmentMode = true
+
+[logger]
+
+# Level of logging: 'error', 'warning', 'info', or 'debug'.
+level = "info"
+
+[client]
+
+# Whether to enable st.cache.
+caching = true
+
+# If false, makes your Streamlit app have a more compact layout.
+showSidebarNavigation = true
+
+[server]
+
+# The port where the server will listen for client and browser connections.
+port = 8501
+
+# The IP address where the server will listen for client and browser connections.
+address = "localhost"
+
+# Connection timeout for the Streamlit server.
+maxUploadSize = 200
+
+# Enable websocket compression.
+enableWebsocketCompression = true
+
+# Enable CORS.
+enableCORS = false
+
+# Enable XSRF protection.
+enableXsrfProtection = true
+
+[browser]
+
+# Internet address where users should point their browsers in order to connect to the app.
+serverAddress = "localhost"
+
+# Whether to send usage statistics to Streamlit.
+gatherUsageStats = false
+
+# Configure the ability to share apps via the Streamlit sharing platform.
+showErrorDetails = true
+
+[theme]
+
+# The preset Streamlit theme that your custom theme inherits from.
+base = "light"
+
+# Primary accent color for interactive elements.
+primaryColor = "#FF6B6B"
+
+# Background color for the main content area.
+backgroundColor = "#FFFFFF"
+
+# Background color used for the sidebar and most interactive widgets.
+secondaryBackgroundColor = "#F0F2F6"
+
+# Color used for almost all text.
+textColor = "#262730"
+
+# Font family for all text in the app.
+font = "sans serif"
