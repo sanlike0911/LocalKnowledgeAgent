@@ -1,7 +1,7 @@
 [global]
 
 # If false, the file watcher will not watch files.
-developmentMode = true
+developmentMode = false
 
 [logger]
 
@@ -10,19 +10,20 @@ level = "info"
 
 [client]
 
-# Whether to enable st.cache.
-caching = true
-
 # If false, makes your Streamlit app have a more compact layout.
 showSidebarNavigation = true
 
 [server]
 
 # The port where the server will listen for client and browser connections.
-port = 8501
+# port = 8501
 
 # The IP address where the server will listen for client and browser connections.
 address = "localhost"
+
+# This will be set to true automatically if headless is not set and we are
+# running in a non-interactive environment.
+headless = true
 
 # Connection timeout for the Streamlit server.
 maxUploadSize = 200
@@ -43,9 +44,6 @@ serverAddress = "localhost"
 
 # Whether to send usage statistics to Streamlit.
 gatherUsageStats = false
-
-# Configure the ability to share apps via the Streamlit sharing platform.
-showErrorDetails = true
 
 [theme]
 
