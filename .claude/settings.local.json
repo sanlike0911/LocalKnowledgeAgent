@@ -4,7 +4,13 @@
       "Bash(find:*)",
       "Bash(cat:*)",
       "Bash(pip3 install:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(source:*)",
+      "Bash(python test_ollama_connection.py:*)",
+      "Bash(ollama pull:*)",
+      "Bash(python test:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

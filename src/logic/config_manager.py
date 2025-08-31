@@ -50,42 +50,38 @@ class ConfigManager(CancellableOperation):
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         
-        # 設定テンプレート
+        # 設定テンプレート（Config モデルに合わせて修正）
         self.config_template = {
-            "document_directories": [],
-            "ollama_model": "llama3.1:8b",
-            "ollama_base_url": "http://localhost:11434",
+            "ollama_host": "http://localhost:11434",
+            "ollama_model": "llama3:8b",
             "chroma_db_path": "./data/chroma_db",
-            "max_search_results": 5,
-            "chunk_size": 1000,
-            "chunk_overlap": 200,
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "top_k": 40,
-            "enable_streaming": True,
-            "ui_theme": "light",
-            "language": "ja",
-            "auto_save": True,
-            "log_level": "INFO"
+            "chroma_collection_name": "knowledge_base",
+            "max_chat_history": 50,
+            "max_file_size_mb": 50,
+            "supported_extensions": [".pdf", ".txt", ".docx"],
+            "selected_folders": [],
+            "index_status": "not_created",
+            "app_debug": False,
+            "log_level": "INFO",
+            "upload_folder": "./uploads",
+            "temp_folder": "./temp"
         }
         
-        # バリデーションルール
+        # バリデーションルール（Config モデルに合わせて修正）
         self.validation_rules = {
-            "document_directories": {"type": list, "required": False},
+            "selected_folders": {"type": list, "required": False},
             "ollama_model": {"type": str, "required": True, "min_length": 1},
-            "ollama_base_url": {"type": str, "required": True, "pattern": r"^https?://"},
+            "ollama_host": {"type": str, "required": True, "pattern": r"^https?://"},
             "chroma_db_path": {"type": str, "required": True, "min_length": 1},
-            "max_search_results": {"type": int, "required": True, "min": 1, "max": 100},
-            "chunk_size": {"type": int, "required": False, "min": 100, "max": 10000},
-            "chunk_overlap": {"type": int, "required": False, "min": 0, "max": 1000},
-            "temperature": {"type": (int, float), "required": False, "min": 0.0, "max": 2.0},
-            "top_p": {"type": (int, float), "required": False, "min": 0.0, "max": 1.0},
-            "top_k": {"type": int, "required": False, "min": 1, "max": 100},
-            "enable_streaming": {"type": bool, "required": False},
-            "ui_theme": {"type": str, "required": False, "choices": ["light", "dark"]},
-            "language": {"type": str, "required": False, "choices": ["ja", "en"]},
-            "auto_save": {"type": bool, "required": False},
-            "log_level": {"type": str, "required": False, "choices": ["DEBUG", "INFO", "WARNING", "ERROR"]}
+            "chroma_collection_name": {"type": str, "required": True, "min_length": 1},
+            "max_chat_history": {"type": int, "required": True, "min": 1, "max": 1000},
+            "max_file_size_mb": {"type": int, "required": True, "min": 1, "max": 1000},
+            "supported_extensions": {"type": list, "required": False},
+            "index_status": {"type": str, "required": True, "choices": ["not_created", "creating", "created", "error"]},
+            "app_debug": {"type": bool, "required": False},
+            "log_level": {"type": str, "required": False, "choices": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]},
+            "upload_folder": {"type": str, "required": False, "min_length": 1},
+            "temp_folder": {"type": str, "required": False, "min_length": 1}
         }
         
         self.logger.info(f"ConfigManager初期化完了", extra={
@@ -123,7 +119,7 @@ class ConfigManager(CancellableOperation):
             
             self.logger.info(f"設定ファイル読み込み完了", extra={
                 "config_path": str(self.config_path),
-                "document_directories_count": len(config.document_directories)
+                "selected_folders_count": len(config.selected_folders)
             })
             
             return config
@@ -179,7 +175,7 @@ class ConfigManager(CancellableOperation):
             
             self.logger.info(f"設定ファイル保存完了", extra={
                 "config_path": str(self.config_path),
-                "document_directories_count": len(config.document_directories)
+                "selected_folders_count": len(config.selected_folders)
             })
             
             return True
@@ -682,7 +678,7 @@ class ConfigManager(CancellableOperation):
                 "last_modified": datetime.fromtimestamp(
                     self.config_path.stat().st_mtime
                 ).isoformat() if self.config_path.exists() else None,
-                "document_directories_count": len(config.document_directories),
+                "selected_folders_count": len(config.selected_folders),
                 "ollama_model": config.ollama_model,
                 "backup_count": len(backups),
                 "last_backup": backups[0]["created_at"] if backups else None

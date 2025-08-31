@@ -582,6 +582,51 @@ class RAGPipeline(CancellableOperation):
         
         return prompt
     
+    def _create_direct_qa_prompt(
+        self,
+        query: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> str:
+        """
+        ドキュメントがない場合の直接QA用プロンプトを作成
+        
+        Args:
+            query: ユーザー質問
+            conversation_history: 会話履歴
+            
+        Returns:
+            str: 生成されたプロンプト
+        """
+        # ドキュメントなしの場合のプロンプトテンプレート
+        direct_prompt_template = """以下の質問に、あなたの知識に基づいて分かりやすく回答してください。
+
+【質問】
+{query}
+
+【回答要求】
+- 日本語で分かりやすく回答してください
+- 知識ベースに参考資料がないため、一般的な知識に基づいて回答します
+- 不明な点については正直に「わからない」と答えてください
+- 可能な限り有用で建設的な回答を心がけてください
+
+【回答】"""
+        
+        # 基本プロンプトを生成
+        prompt = direct_prompt_template.format(query=query)
+        
+        # 会話履歴がある場合は追加
+        if conversation_history:
+            history_text = "\n【会話履歴】\n"
+            for msg in conversation_history[-5:]:  # 直近5件のみ
+                role = "ユーザー" if msg.get('role') == 'user' else "アシスタント"
+                content = msg.get('content', '')
+                history_text += f"{role}: {content}\n"
+            
+            # プロンプトの質問部分の前に履歴を挿入
+            prompt = prompt.replace("【質問】", f"{history_text}\n【質問】")
+        
+        return prompt
+    
     def _call_llm(self, prompt: str) -> QAResponse:
         """
         LLMを呼び出してレスポンスを生成
@@ -627,20 +672,40 @@ class RAGPipeline(CancellableOperation):
                 "top_k": top_k
             })
             
-            # 1. 関連文書検索
-            search_results = self.search_relevant_documents(
-                query, 
-                top_k=top_k, 
-                min_similarity_threshold=min_similarity_threshold
-            )
+            # 1. 関連文書検索（ドキュメント0件対応）
+            search_results = []
+            context = ""
+            try:
+                search_results = self.search_relevant_documents(
+                    query, 
+                    top_k=top_k, 
+                    min_similarity_threshold=min_similarity_threshold
+                )
+                # 2. コンテキスト生成
+                context = self._generate_context_from_documents(search_results)
+                
+            except QAError as search_error:
+                # ドキュメント0件の場合のフォールバック処理
+                if "関連する文書が見つかりません" in str(search_error):
+                    self.logger.info(f"ドキュメント0件 - 直接LLM回答モードに切り替え", extra={
+                        "query": query,
+                        "reason": "no_documents_found"
+                    })
+                    context = ""
+                    search_results = []
+                else:
+                    # その他の検索エラーは再発生
+                    raise
             
             self.check_cancellation()
             
-            # 2. コンテキスト生成
-            context = self._generate_context_from_documents(search_results)
-            
-            # 3. プロンプト作成
-            prompt = self._create_qa_prompt(query, context, conversation_history)
+            # 3. プロンプト作成（文書なしモード対応）
+            if context:
+                # 通常のRAGプロンプト
+                prompt = self._create_qa_prompt(query, context, conversation_history)
+            else:
+                # ドキュメントがない場合のプロンプト
+                prompt = self._create_direct_qa_prompt(query, conversation_history)
             
             self.check_cancellation()
             
@@ -893,8 +958,10 @@ class QAService:
                 top_k=top_k,
                 min_similarity_threshold=min_similarity_threshold
             )
-        except QAError:
-            # QAErrorはそのまま再発生
+        except QAError as e:
+            # QAErrorは詳細ログとともに再発生
+            self.logger.error(f"QAError in ask_question: {e}", exc_info=True, 
+                            extra={"query": query, "top_k": top_k})
             raise
     
     def ask_question_stream(

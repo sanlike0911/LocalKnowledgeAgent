@@ -89,7 +89,7 @@ class TestConfigInterface:
         
         assert isinstance(default_config, Config)
         assert default_config.ollama_host == "http://localhost:11434"
-        assert default_config.ollama_model == "llama2"
+        assert default_config.ollama_model == "llama3:8b"
         assert default_config.chroma_collection_name == "knowledge_base"
         assert default_config.max_chat_history == 50
     
@@ -320,7 +320,7 @@ class TestConfigInterface:
         
         assert isinstance(reset_config, Config)
         assert reset_config.ollama_host == "http://localhost:11434"  # デフォルト値
-        assert reset_config.ollama_model == "llama2"  # デフォルト値
+        assert reset_config.ollama_model == "llama3:8b"  # デフォルト値
         assert reset_config.max_chat_history == 50  # デフォルト値
     
     def test_config_interface_error_handling(self) -> None:

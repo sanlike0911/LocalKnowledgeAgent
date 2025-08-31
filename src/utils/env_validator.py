@@ -115,7 +115,7 @@ class EnvironmentValidator:
             "ollama_host": self.get_optional_env(
                 "OLLAMA_HOST", "http://localhost:11434"
             ),
-            "ollama_model": self.get_optional_env("OLLAMA_MODEL", "llama2"),
+            "ollama_model": self.get_optional_env("OLLAMA_MODEL", "llama3:8b"),
             # ChromaDB設定
             "chroma_db_path": self.get_optional_env(
                 "CHROMA_DB_PATH", "./data/chroma_db"

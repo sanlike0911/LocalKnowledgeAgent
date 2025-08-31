@@ -349,7 +349,7 @@ class MainView(CancellableOperation):
                 return
             
             # ストリーミング対応の回答生成
-            if self.config.enable_streaming:
+            if getattr(self.config, 'enable_streaming', True):
                 self._process_streaming_question(user_input)
             else:
                 self._process_standard_question(user_input)
@@ -543,7 +543,7 @@ class MainView(CancellableOperation):
             st.header("⚙️ 現在の設定")
             
             config_summary = {
-                "モデル": self.config.ollama_model,
+                "モデル": getattr(self.config, 'ollama_model', 'llama3:8b'),
                 "最大検索結果数": getattr(self.config, 'max_search_results', 5),
                 "ストリーミング": "有効" if getattr(self.config, 'enable_streaming', True) else "無効",
                 "言語": getattr(self.config, 'language', 'ja')
@@ -646,10 +646,11 @@ class MainView(CancellableOperation):
             return result
             
         except QAError as e:
+            self.logger.error(f"QAエラー: {e}", exc_info=True)
             self.show_status(f"質問の処理中にエラーが発生しました: {e}", "error")
             return None
         except Exception as e:
-            self.logger.error(f"質問処理エラー: {e}")
+            self.logger.error(f"質問処理エラー: {e}", exc_info=True)
             self.show_status("予期しないエラーが発生しました", "error")
             return None
     

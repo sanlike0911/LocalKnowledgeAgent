@@ -249,7 +249,7 @@ class SettingsView:
                 ollama_model = st.text_input(
                     "LLMモデル名", 
                     value=config.ollama_model,
-                    help="Ollamaで使用するモデル名を指定してください（例: llama2, codellama）"
+                    help="Ollamaで使用するモデル名を指定してください（例: llama3:8b, codellama）"
                 )
                 
                 st.subheader("データベース設定") 

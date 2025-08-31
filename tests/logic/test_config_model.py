@@ -21,7 +21,7 @@ class TestConfigModel:
         config = Config()
 
         assert config.ollama_host == "http://localhost:11434"
-        assert config.ollama_model == "llama2"
+        assert config.ollama_model == "llama3:8b"
         assert config.chroma_db_path == "./data/chroma_db"
         assert config.chroma_collection_name == "knowledge_base"
         assert config.max_chat_history == 50
@@ -106,7 +106,7 @@ class TestConfigModel:
 
         config = Config(
             ollama_host="http://localhost:11434",
-            ollama_model="llama2",
+            ollama_model="llama3:8b",
             selected_folders=["/path/to/docs"],
         )
 
@@ -114,7 +114,7 @@ class TestConfigModel:
 
         assert isinstance(config_dict, dict)
         assert config_dict["ollama_host"] == "http://localhost:11434"
-        assert config_dict["ollama_model"] == "llama2"
+        assert config_dict["ollama_model"] == "llama3:8b"
         assert config_dict["selected_folders"] == ["/path/to/docs"]
         assert "chroma_db_path" in config_dict
         assert "max_chat_history" in config_dict

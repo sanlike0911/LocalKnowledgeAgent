@@ -41,7 +41,7 @@ class SessionStateManager:
         # 設定
         "config": {
             "ollama_host": "http://localhost:11434",
-            "ollama_model": "llama2",
+            "ollama_model": "llama3:8b",
             "chroma_db_path": "./data/chroma_db",
             "chroma_collection_name": "knowledge_base",
             "max_chat_history": 50,

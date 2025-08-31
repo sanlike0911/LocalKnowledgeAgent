@@ -58,6 +58,7 @@ class ChromaDBIndexer(CancellableOperation):
                 )
             )
         except Exception as e:
+            self.logger.error(f"ChromaDBクライアント初期化エラー: {e}", exc_info=True, extra={"db_path": str(db_path)})
             raise IndexingError(
                 f"ChromaDBクライアント初期化エラー: {e}",
                 error_code="IDX-000",
@@ -71,6 +72,8 @@ class ChromaDBIndexer(CancellableOperation):
                 metadata={"description": f"Knowledge base collection: {collection_name}"}
             )
         except Exception as e:
+            self.logger.error(f"ChromaDBコレクション初期化エラー: {e}", exc_info=True, 
+                            extra={"collection_name": collection_name, "db_path": str(db_path)})
             raise IndexingError(
                 f"ChromaDBコレクション初期化エラー: {e}",
                 error_code="IDX-000",

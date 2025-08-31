@@ -118,16 +118,24 @@ class StructuredLogger:
         # ログディレクトリを作成
         self.log_directory.mkdir(parents=True, exist_ok=True)
         
+        # 環境変数からログレベルを取得
+        log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
+        console_level_str = os.getenv('CONSOLE_LOG_LEVEL', 'INFO').upper()
+        
+        # ログレベルをintに変換
+        log_level = getattr(logging, log_level_str, logging.INFO)
+        console_level = getattr(logging, console_level_str, logging.INFO)
+        
         # ルートロガーの設定
         root_logger = logging.getLogger()
-        root_logger.setLevel(logging.INFO)
+        root_logger.setLevel(min(log_level, console_level, logging.ERROR))  # 最も低いレベルに設定
         
         # 既存のハンドラーをクリア
         root_logger.handlers.clear()
         
         # コンソールハンドラー
         console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(console_level)
         console_formatter = StructuredFormatter(include_extra=False)
         console_handler.setFormatter(console_formatter)
         root_logger.addHandler(console_handler)
@@ -139,7 +147,7 @@ class StructuredLogger:
             backupCount=self.backup_count,
             encoding='utf-8'
         )
-        file_handler.setLevel(logging.DEBUG)
+        file_handler.setLevel(log_level)
         file_formatter = StructuredFormatter(include_extra=True)
         file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)
@@ -159,7 +167,9 @@ class StructuredLogger:
         logging.info("構造化ログシステムが初期化されました", extra={
             "log_directory": str(self.log_directory),
             "log_file": str(self.log_file),
-            "error_log_file": str(self.error_log_file)
+            "error_log_file": str(self.error_log_file),
+            "log_level": logging.getLevelName(log_level),
+            "console_level": logging.getLevelName(console_level)
         })
     
     def get_logger(self, name: str) -> logging.Logger:

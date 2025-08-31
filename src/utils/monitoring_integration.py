@@ -6,6 +6,7 @@
 import atexit
 import signal
 import sys
+import threading
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 import json
@@ -101,13 +102,16 @@ class MonitoringIntegration:
     
     def _setup_signal_handlers(self):
         """シグナルハンドラーを設定"""
-        def signal_handler(signum, frame):
-            self.logger.info(f"シグナル受信: {signum}")
-            self.shutdown()
-            sys.exit(0)
-        
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
+        if threading.current_thread() is threading.main_thread():
+            def signal_handler(signum, frame):
+                self.logger.info(f"シグナル受信: {signum}")
+                self.shutdown()
+                sys.exit(0)
+            
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
+        else:
+            self.logger.warning("シグナルハンドラーはメインスレッドでのみ設定可能です。")
     
     def _setup_integrated_alerts(self):
         """統合アラートを設定"""

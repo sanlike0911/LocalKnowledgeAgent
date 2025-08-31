@@ -44,7 +44,7 @@ class Config:
     """
 
     ollama_host: str = "http://localhost:11434"
-    ollama_model: str = "llama2"
+    ollama_model: str = "llama3:8b"
     chroma_db_path: str = "./data/chroma_db"
     chroma_collection_name: str = "knowledge_base"
     max_chat_history: int = 50
@@ -132,7 +132,7 @@ class Config:
         """
         return cls(
             ollama_host=data.get("ollama_host", "http://localhost:11434"),
-            ollama_model=data.get("ollama_model", "llama2"),
+            ollama_model=data.get("ollama_model", "llama3:8b"),
             chroma_db_path=data.get("chroma_db_path", "./data/chroma_db"),
             chroma_collection_name=data.get("chroma_collection_name", "knowledge_base"),
             max_chat_history=data.get("max_chat_history", 50),
