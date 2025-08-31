@@ -495,7 +495,7 @@ class SettingsView:
             
             # セレクターをレンダリング
             selected_model = st.selectbox(
-                "LLM（大規模言語）モデル",
+                "LLMモデル",
                 options=available_models,
                 index=current_index,
                 help="チャット応答に使用するLLMモデルを選択してください。リストはOllamaから自動取得されます。"

@@ -280,11 +280,13 @@ RAGシステムで質問応答を提供します。
 - ✅ リファクタリング: タイムアウト5秒設定・エラーメッセージ表示・ログ出力強化完了
 
 **Phase 6実装成果物**:
+
 - `src/logic/ollama_model_service.py` - OllamaModelServiceクラス
 - `tests/test_ollama_model_service.py` - 包括的テストスイート（12テスト）
 - `src/ui/settings_view.py` - 動的LLMモデル選択UI（`_render_llm_model_selector`メソッド）
 
 **技術実装詳細**:
+
 - Ollama API `/api/tags` エンドポイント統合
 - requests.exceptions（ConnectionError, Timeout, HTTPError）完全対応
 - フォールバックモデル: llama3:8b, llama3:70b, mistral:latest, codellama:13b, gemma:2b, gemma:7b
@@ -760,7 +762,7 @@ RAGシステムで質問応答を提供します。
   2. ✅ SettingsViewのUI変更（LLMモデル選択）完了
   3. ✅ Ollama APIからのモデル一覧取得機能完了
   4. ✅ エラーハンドリング・フォールバック機能完了
-- **実装成果物**: 
+- **実装成果物**:  
   - `src/ui/settings_view.py` の `_render_llm_model_selector` メソッド
   - 動的モデル選択・フォールバック機能・リアルタイムステータス表示
 - **担当**: UI・バックエンド担当者
