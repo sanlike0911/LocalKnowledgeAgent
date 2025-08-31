@@ -467,7 +467,7 @@ RAGシステムで質問応答を提供します。
 
 - **症状**: 設定画面でフォルダを追加すると「[CFG-007] 必須設定項目が不足: ['ollama_base_url', 'max_search_results']」エラーが発生
 - **影響**: 設定画面でのフォルダ管理機能が使用不可能
-- **根本原因**: 
+- **根本原因**:
   - Config検証ルールが厳密すぎて、デフォルト値が適用されていない項目を不足とみなす
   - 設定保存時にデフォルト値の補完処理が不足
   - 項目名の不一致（'ollama_base_url' vs 'ollama_host'）
@@ -489,7 +489,7 @@ RAGシステムで質問応答を提供します。
 
 - **症状**: 設定画面でフォルダを追加すると「[CFG-011] 設定保存処理エラー: 'Config' object has no attribute 'document_directories'」エラーが発生
 - **影響**: RAGファイルの登録・フォルダ管理機能が使用不可能
-- **根本原因**: 
+- **根本原因**:
   - ConfigManagerで`config.document_directories`を参照しているが、実際のConfigモデルでは`selected_folders`
   - 属性名の不整合により設定保存時にAttributeErrorが発生
 - **対策**:
@@ -508,7 +508,7 @@ RAGシステムで質問応答を提供します。
 
 - **症状**: チャットで「代表取締役の宿泊費を教えて」と質問すると「[QA-001] 関連する文書が見つかりません」エラーが発生
 - **影響**: RAGシステムの核心機能（文書検索・質問応答）が動作しない
-- **根本原因**: 
+- **根本原因**:
   - 設定ファイルで`"index_status": "not_created"`となっている
   - ragDataフォルダが設定されているが、ChromaDBインデックスが作成されていない
   - エラーログで`"searched_documents": 0`と表示される
@@ -593,7 +593,7 @@ RAGシステムで質問応答を提供します。
   6. ログエントリのキー名重複の修正 ✅
 - **実装完了内容**:
   - ChromaDBIndexer._create_document_from_file()メソッド新規実装
-  - _read_pdf_file(), _read_txt_file(), _read_docx_file()の統合
+  - _read_pdf_file(),_read_txt_file(), _read_docx_file()の統合
   - 適切なエラーハンドリングとログ出力
   - Document.create_new()使用への完全移行
   - test_document_fix.pyによる動作検証完了
@@ -617,7 +617,7 @@ RAGシステムで質問応答を提供します。
 - **実装完了内容**:
   - main_view.py: embedding_model="nomic-embed-text"に固定
   - app.py: MainView(indexer=self.indexer)でindexer渡し
-  - MainView.__init__: indexer引数追加とフォールバック機能
+  - MainView.**init**: indexer引数追加とフォールバック機能
   - 埋め込みベクトル次元数整合性確認（768次元で統一）
 - **担当**: バックエンドエンジニア
 - **期限**: 即時対応
@@ -654,6 +654,7 @@ RAGシステムで質問応答を提供します。
   3. 既存プロンプトシステムの修正 ⏳
   4. 日本語回答品質の検証 ⏳
 - **実装パターン**:
+
   ```python
   # シンプルな日本語固定プロンプト
   system_prompt = "日本語で回答してください。"
@@ -661,6 +662,7 @@ RAGシステムで質問応答を提供します。
   # RAG回答生成
   response = generate_answer(query, context, system_prompt)
   ```
+
 - **担当**: QAシステム担当者
 - **ステータス**: ⏳ **計画中**
 
@@ -684,11 +686,13 @@ RAGシステムで質問応答を提供します。
 ### 依存関係とリスク
 
 **技術的変更**:
+
 - langdetectライブラリ不要（削除予定）
 - 複雑な言語検出ロジック不要
 - シンプルなプロンプト制御のみ
 
 **リスク緩和**:
+
 - 実装の簡素化によりエラー率低下
 - 処理時間短縮（言語検出処理なし）
 - 保守性向上（単純な仕様）
