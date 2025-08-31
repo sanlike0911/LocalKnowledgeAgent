@@ -66,7 +66,7 @@ class LocalKnowledgeAgentApp:
                 )
                 
                 # UI コンポーネント
-                self.main_view = MainView()
+                self.main_view = MainView(indexer=self.indexer)
                 
                 self.settings_view = SettingsView(
                     config_interface=self.config_manager,

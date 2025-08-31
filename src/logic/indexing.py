@@ -203,6 +203,52 @@ class ChromaDBIndexer(CancellableOperation):
             details={"file_path": str(file_path), "tried_encodings": encodings}
         )
     
+    def _read_docx_file(self, file_path: Path) -> str:
+        """
+        DOCXファイルからテキストを読み込み
+        
+        Args:
+            file_path: DOCXファイルパス
+            
+        Returns:
+            str: ファイル内容
+            
+        Raises:
+            IndexingError: ファイル読み込みエラー
+        """
+        try:
+            from docx import Document as DocxDocument
+            
+            doc = DocxDocument(file_path)
+            full_text = []
+            
+            # 段落のテキストを抽出
+            for para in doc.paragraphs:
+                if para.text.strip():
+                    full_text.append(para.text)
+            
+            # テーブルのテキストも抽出
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        if cell.text.strip():
+                            full_text.append(cell.text)
+            
+            return "\n".join(full_text)
+            
+        except ImportError:
+            raise IndexingError(
+                f"python-docxライブラリが必要です。pip install python-docx でインストールしてください",
+                error_code="IDX-004",
+                details={"file_path": str(file_path)}
+            )
+        except Exception as e:
+            raise IndexingError(
+                f"DOCXファイル読み込みエラー: {file_path} - {e}",
+                error_code="IDX-004",
+                details={"file_path": str(file_path), "original_error": str(e)}
+            ) from e
+    
     def _split_text_into_chunks(
         self,
         text: str,
@@ -229,6 +275,60 @@ class ChromaDBIndexer(CancellableOperation):
             return text_splitter.split_text(text)
         
         return self.text_splitter.split_text(text)
+    
+    def _create_document_from_file(self, file_path: Path) -> Optional[Document]:
+        """
+        ファイルからDocumentオブジェクトを作成
+        
+        Args:
+            file_path: ファイルパス
+            
+        Returns:
+            Optional[Document]: 作成されたDocumentオブジェクト（失敗時はNone）
+        """
+        try:
+            # ファイル存在確認
+            if not file_path.exists():
+                self.logger.warning(f"ファイルが存在しません: {file_path}")
+                return None
+            
+            # ファイル拡張子を取得
+            file_ext = file_path.suffix.lower()
+            
+            # ファイル内容を読み込み
+            content = ""
+            title = file_path.stem  # ファイル名（拡張子なし）をタイトルとする
+            
+            if file_ext == ".pdf":
+                content = self._read_pdf_file(file_path)
+            elif file_ext == ".txt":
+                content = self._read_txt_file(file_path)
+            elif file_ext == ".md":
+                content = self._read_txt_file(file_path)  # Markdownもテキストとして読み込み
+            elif file_ext == ".docx":
+                content = self._read_docx_file(file_path)
+            else:
+                self.logger.warning(f"サポートされていないファイル形式: {file_ext}")
+                return None
+            
+            if not content or not content.strip():
+                self.logger.warning(f"ファイルの内容が空です: {file_path}")
+                return None
+            
+            # Documentオブジェクトを作成
+            document = Document.create_new(
+                title=title,
+                content=content,
+                file_path=str(file_path),
+                file_size=file_path.stat().st_size
+            )
+            
+            self.logger.debug(f"ドキュメント作成成功: {file_path.name}")
+            return document
+            
+        except Exception as e:
+            self.logger.error(f"ドキュメント作成エラー: {file_path} - {e}", exc_info=True)
+            return None
     
     def _create_embeddings(self, text_chunks: List[str]) -> List[List[float]]:
         """
@@ -318,9 +418,9 @@ class ChromaDBIndexer(CancellableOperation):
             text_chunks = self._split_text_into_chunks(document.content)
             if not text_chunks:
                 raise IndexingError(
-                    f"テキストチャンクの生成に失敗: {document.filename}",
+                    f"テキストチャンクの生成に失敗: {document.file_path}",
                     error_code="IDX-007",
-                    details={"filename": document.filename}
+                    details={"document_filename": Path(document.file_path).name}
                 )
             
             self.check_cancellation()
@@ -331,7 +431,7 @@ class ChromaDBIndexer(CancellableOperation):
             self.check_cancellation()
             
             # ドキュメントIDを生成
-            document_id = document.document_id
+            document_id = document.id
             
             # メタデータを準備
             metadatas = []
@@ -339,7 +439,7 @@ class ChromaDBIndexer(CancellableOperation):
             for i, chunk in enumerate(text_chunks):
                 chunk_id = f"{document_id}_{i}"
                 metadata = {
-                    "filename": document.filename,
+                    "document_filename": Path(document.file_path).name,
                     "file_path": document.file_path or "",
                     "file_type": document.file_type,
                     "file_size": document.file_size,
@@ -358,9 +458,9 @@ class ChromaDBIndexer(CancellableOperation):
                 ids=ids
             )
             
-            self.logger.info(f"ドキュメントインデックス追加完了: {document.filename}", extra={
+            self.logger.info(f"ドキュメントインデックス追加完了: {Path(document.file_path).name}", extra={
                 "document_id": document_id,
-                "filename": document.filename,
+                "document_filename": Path(document.file_path).name,
                 "chunks_count": len(text_chunks)
             })
             
@@ -370,9 +470,9 @@ class ChromaDBIndexer(CancellableOperation):
             raise
         except Exception as e:
             raise IndexingError(
-                f"ドキュメントインデックス追加エラー: {document.filename} - {e}",
+                f"ドキュメントインデックス追加エラー: {Path(document.file_path).name} - {e}",
                 error_code="IDX-008",
-                details={"filename": document.filename, "original_error": str(e)}
+                details={"document_filename": Path(document.file_path).name, "original_error": str(e)}
             ) from e
     
     def add_documents(self, documents: List[Document]) -> List[str]:
@@ -402,7 +502,7 @@ class ChromaDBIndexer(CancellableOperation):
                 
                 if progress_tracker:
                     progress_tracker.update(
-                        message=f"処理中: {document.filename} ({i+1}/{total_docs})"
+                        message=f"処理中: {Path(document.file_path).name} ({i+1}/{total_docs})"
                     )
                 
                 document_id = self.add_document(document)
@@ -484,7 +584,7 @@ class ChromaDBIndexer(CancellableOperation):
             self.delete_document(document_id)
             
             # 新しいドキュメントを追加 (IDを維持)
-            updated_document.document_id = document_id
+            updated_document.id = document_id
             self.add_document(updated_document)
             
             return True
@@ -596,8 +696,9 @@ class ChromaDBIndexer(CancellableOperation):
             # ドキュメントオブジェクトを作成
             documents = []
             for file_path in file_paths:
-                doc = Document.from_file(file_path)
-                documents.append(doc)
+                doc = self._create_document_from_file(file_path)
+                if doc:  # ファイル読み込みが成功した場合のみ追加
+                    documents.append(doc)
             
             # 一括でインデックスに追加
             document_ids = self.add_documents(documents)
@@ -696,7 +797,9 @@ class ChromaDBIndexer(CancellableOperation):
 
                     for file_path in file_paths:
                         self.check_cancellation()
-                        doc = Document.from_file(file_path)
+                        doc = self._create_document_from_file(file_path)
+                        if not doc:  # ファイル読み込みに失敗した場合はスキップ
+                            continue
                         self.add_document(doc) # 個別にドキュメントを追加
                         processed_files_count += 1
                         progress_tracker.update(

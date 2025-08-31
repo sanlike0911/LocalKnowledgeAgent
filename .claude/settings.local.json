@@ -10,7 +10,10 @@
       "Bash(python test_ollama_connection.py:*)",
       "Bash(ollama pull:*)",
       "Bash(python test:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(ollama show:*)",
+      "Bash(ollama list:*)",
+      "Bash(sqlite3:*)"
     ],
     "deny": [],
     "ask": []

@@ -22,12 +22,17 @@ class SettingsView:
         st.title("設定")
 
         try:
+            current_config = self.config_interface.load_config()
+            
             # フォルダ管理
             st.header("フォルダ管理")
-            current_config = self.config_interface.load_config()
             
             # 既存の対象フォルダを表示
             if current_config.selected_folders:
+                st.subheader("登録済みフォルダ")
+                for folder in current_config.selected_folders:
+                    st.write(f"📁 {folder}")
+                
                 selected_folders_to_remove = st.multiselect(
                     "削除するフォルダを選択",
                     options=current_config.selected_folders,
@@ -40,16 +45,29 @@ class SettingsView:
                 st.info("現在、対象フォルダは設定されていません。")
 
             # フォルダ追加
+            st.subheader("フォルダ追加")
             new_folder_path = st.text_input(
                 "新しいフォルダパス", 
                 key="new_folder_path",
-                help="PDF/TXTファイルが含まれるフォルダのパスを入力してください"
+                help="PDF/TXT/DOCX/MDファイルが含まれるフォルダのパスを入力してください",
+                placeholder="例: /Users/username/Documents/data"
             )
             if st.button("フォルダを追加", type="primary"):
                 self._handle_folder_addition(current_config, new_folder_path)
+            st.markdown("---")  # ← 区切り線
+
+            # インデックス管理
+            st.header("インデックス管理")
+            self._render_index_management(current_config)
+
+            # アプリケーション設定
+            st.header("アプリケーション設定")
+            self._render_app_settings(current_config)
 
         except ConfigError as e:
             st.error(f"設定エラー: {e.message}")
+        except IndexingError as e:
+            st.error(f"インデックス処理エラー: {e.message}")
         except Exception as e:
             st.error(f"予期しないエラーが発生しました: {str(e)}")
     
@@ -141,21 +159,6 @@ class SettingsView:
                 error_code="CFG_FOLDER_REMOVE_FAILED",
                 details={"folders_to_remove": folders_to_remove}
             )
-
-            # インデックス管理
-            st.header("インデックス管理")
-            self._render_index_management(current_config)
-
-            # アプリケーション設定
-            st.header("アプリケーション設定")
-            self._render_app_settings(current_config)
-
-        except ConfigError as e:
-            st.error(f"設定エラー: {e.message}")
-        except IndexingError as e:
-            st.error(f"インデックス処理エラー: {e.message}")
-        except Exception as e:
-            st.error(f"予期しないエラーが発生しました: {str(e)}")
     
     def _render_index_management(self, config: Config) -> None:
         """
@@ -168,32 +171,66 @@ class SettingsView:
             # インデックス統計表示
             index_stats = self.indexing_interface.get_collection_stats()
             
-            col1, col2, col3 = st.columns(3)
+            # 現在の状態表示
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
-                status = "作成済み" if index_stats['document_count'] > 0 else "未作成"
-                st.metric("インデックス状態", status)
+                # 設定ファイルのindex_statusを表示
+                status_color = {
+                    "not_created": "🔴",
+                    "creating": "🟡", 
+                    "created": "🟢",
+                    "error": "❌"
+                }
+                status_text = {
+                    "not_created": "未作成",
+                    "creating": "作成中",
+                    "created": "作成済み", 
+                    "error": "エラー"
+                }
+                current_status = getattr(config, 'index_status', 'not_created')
+                st.metric(
+                    "インデックス状態", 
+                    f"{status_color.get(current_status, '❓')} {status_text.get(current_status, '不明')}"
+                )
             with col2:
                 st.metric("文書数", index_stats['document_count'])
             with col3:
                 st.metric("コレクション名", index_stats['collection_name'])
+            with col4:
+                st.metric("登録フォルダ数", len(config.selected_folders))
+            
+            # 状態に応じたメッセージ表示
+            if current_status == "not_created" and index_stats['document_count'] == 0:
+                st.warning("⚠️ インデックスが作成されていません。「インデックスを作成」ボタンを押してインデックスを作成してください。")
+            elif current_status == "created" and index_stats['document_count'] > 0:
+                st.success("✅ インデックスは正常に作成されています。チャット機能が利用可能です。")
+            elif current_status == "error":
+                st.error("❌ インデックス作成でエラーが発生しました。再作成をお試しください。")
+            elif current_status == "creating":
+                st.info("⏳ インデックスを作成中です。しばらくお待ちください。")
             
             # インデックス操作ボタン
             col1, col2 = st.columns(2)
             
             with col1:
-                if st.button("インデックスを再作成", type="primary", use_container_width=True):
-                    self._handle_index_rebuild(config)
+                # フォルダが設定されているかチェック
+                if not config.selected_folders:
+                    st.button("インデックスを作成", type="primary", disabled=True, use_container_width=True)
+                    st.caption("⚠️ フォルダを追加してからインデックスを作成してください")
+                else:
+                    if st.button("インデックスを作成", type="primary", use_container_width=True):
+                        self._handle_index_rebuild(config)
             
             with col2:
                 if st.button("インデックスを削除", type="secondary", use_container_width=True):
-                    self._handle_index_clear()
+                    self._handle_index_clear(config)
                     
-        except IndexingError as e:
-            st.error(f"インデックス情報の取得中にエラーが発生しました: {e.message}")
+        except Exception as e:
+            st.error(f"インデックス情報の取得中にエラーが発生しました: {str(e)}")
     
     def _handle_index_rebuild(self, config: Config) -> None:
         """
-        インデックス再作成処理
+        インデックス再作成処理（index_status更新機能付き）
         
         Args:
             config: 現在の設定
@@ -203,32 +240,93 @@ class SettingsView:
                 st.warning("インデックスを作成するフォルダが選択されていません。フォルダを追加してからお試しください。")
                 return
             
-            with st.spinner("インデックスを再作成しています。しばらくお待ちください..."):
-                self.indexing_interface.rebuild_index_from_folders(config.selected_folders)
+            # インデックス作成開始 - status を creating に更新
+            config.index_status = "creating"
+            self.config_interface.save_config(config)
+            st.info("🟡 インデックス作成を開始します...")
             
-            st.success("インデックスの再作成が完了しました。")
-            st.rerun()
+            # インデックス作成実行
+            progress_bar = st.progress(0)
+            status_text = st.empty()
             
+            try:
+                status_text.text("📁 フォルダをスキャン中...")
+                progress_bar.progress(20)
+                
+                status_text.text("📄 ドキュメントを処理中...")
+                progress_bar.progress(50)
+                
+                # 実際のインデックス作成処理
+                with st.spinner("インデックスを作成しています。しばらくお待ちください..."):
+                    self.indexing_interface.rebuild_index_from_folders(config.selected_folders)
+                
+                progress_bar.progress(90)
+                status_text.text("✅ インデックス作成完了...")
+                
+                # インデックス作成完了 - status を created に更新
+                config.index_status = "created"
+                self.config_interface.save_config(config)
+                
+                progress_bar.progress(100)
+                status_text.empty()
+                progress_bar.empty()
+                
+                st.success("🎉 インデックスの作成が完了しました！チャット機能が利用可能になりました。")
+                st.rerun()
+                
+            except Exception as e:
+                # インデックス作成失敗 - status を error に更新
+                config.index_status = "error"
+                self.config_interface.save_config(config)
+                
+                progress_bar.empty()
+                status_text.empty()
+                
+                raise IndexingError(
+                    f"インデックス作成中にエラーが発生しました: {str(e)}",
+                    error_code="IDX_REBUILD_FAILED",
+                    details={"selected_folders": config.selected_folders}
+                )
+            
+        except IndexingError:
+            raise
         except Exception as e:
+            # 予期しないエラーの場合もstatus を error に更新
+            config.index_status = "error"
+            self.config_interface.save_config(config)
+            
             raise IndexingError(
-                f"インデックス再作成中にエラーが発生しました: {str(e)}",
-                error_code="IDX_REBUILD_FAILED",
+                f"インデックス作成処理で予期しないエラーが発生しました: {str(e)}",
+                error_code="IDX_REBUILD_UNEXPECTED",
                 details={"selected_folders": config.selected_folders}
             )
     
-    def _handle_index_clear(self) -> None:
-        """インデックス削除処理"""
+    def _handle_index_clear(self, config: Config) -> None:
+        """インデックス削除処理（index_status更新機能付き）
+        
+        Args:
+            config: 現在の設定
+        """
         try:
             # 確認ダイアログを表示したい場合のロジック
             st.warning("⚠️ この操作により全てのインデックスデータが削除されます。")
             
+            # インデックス削除実行
             with st.spinner("インデックスを削除しています..."):
                 self.indexing_interface.clear_collection()
+            
+            # インデックス削除完了 - status を not_created に更新
+            config.index_status = "not_created"
+            self.config_interface.save_config(config)
             
             st.success("インデックスの削除が完了しました。")
             st.rerun()
             
         except Exception as e:
+            # インデックス削除失敗 - status を error に更新
+            config.index_status = "error"
+            self.config_interface.save_config(config)
+            
             raise IndexingError(
                 f"インデックス削除中にエラーが発生しました: {str(e)}",
                 error_code="IDX_CLEAR_FAILED"

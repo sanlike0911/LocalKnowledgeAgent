@@ -141,3 +141,15 @@
 - **依存関係管理:** requirements.txt または poetry.lock で依存関係を固定
 - **設定管理:** 環境変数を使用し、設定ファイルで環境別設定を分離
 - **ドキュメント:** README.md、API仕様書を最新状態に保持
+
+## AI Agentへの具体的な指示（プロンプト例）
+
+```prompt
+あなたは指示書の【@GEMINI.md】と、設計書の【@docs/design-specification.md】を知識ベースにソフトウェア開発してください。
+開発計画がない場合は【project-plan.md】に、上記の知識を基に開発計画を作成してから開発を始めてください。
+
+開発計画の【MVP】タスクから始めてください。
+
+あなたは指示書の【@CLAUDE.md】と、設計書の【@docs/design-specification.md】を知識ベースにソフトウェア開発してください。
+開発計画は【project-plan.md】を理解してから、【XXX】の開発を始めてください。
+```

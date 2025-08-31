@@ -41,6 +41,7 @@ class QAResult:
     context: str
     confidence_score: float = 0.0
     processing_time: float = 0.0
+    response_language: str = "ja"  # 日本語固定
     created_at: datetime = None
     
     def __post_init__(self):
@@ -56,6 +57,7 @@ class QAResult:
             'context': self.context,
             'confidence_score': self.confidence_score,
             'processing_time': self.processing_time,
+            'response_language': self.response_language,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -420,7 +422,9 @@ class RAGPipeline(CancellableOperation):
         self.qa_engine = OllamaQAEngine(model_name)
         
         # プロンプトテンプレート
-        self.qa_prompt_template = """以下のコンテキスト情報を参考にして、ユーザーの質問に正確で有用な回答を提供してください。
+        self.qa_prompt_template = """日本語で回答してください。
+
+以下のコンテキスト情報を参考にして、ユーザーの質問に正確で有用な回答を提供してください。
 
 【コンテキスト情報】
 {context}
@@ -598,7 +602,9 @@ class RAGPipeline(CancellableOperation):
             str: 生成されたプロンプト
         """
         # ドキュメントなしの場合のプロンプトテンプレート
-        direct_prompt_template = """以下の質問に、あなたの知識に基づいて分かりやすく回答してください。
+        direct_prompt_template = """日本語で回答してください。
+
+以下の質問に、あなたの知識に基づいて分かりやすく回答してください。
 
 【質問】
 {query}
@@ -739,6 +745,7 @@ class RAGPipeline(CancellableOperation):
                 'sources': sources,
                 'context': context,
                 'processing_time': processing_time,
+                'response_language': "ja",  # 日本語固定
                 'model_metadata': llm_response.metadata,
                 'created_at': datetime.now().isoformat()
             }

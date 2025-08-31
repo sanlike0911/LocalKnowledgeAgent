@@ -29,9 +29,10 @@ class StreamlitChatManager:
     チャット履歴の表示・更新・管理機能を提供
     """
     
-    def __init__(self):
+    def __init__(self, indexer=None):
         """Streamlit チャット管理を初期化"""
         self.logger = get_logger(__name__)
+        self.indexer = indexer
         
         # セッション状態の初期化
         if 'chat_history' not in st.session_state:
@@ -234,12 +235,13 @@ class MainView(CancellableOperation):
     Streamlit メイン画面の表示・操作・QAシステム統合を管理
     """
     
-    def __init__(self):
+    def __init__(self, indexer=None):
         """メイン画面UIを初期化"""
         super().__init__("Main View")
         
         self.logger = get_logger(__name__)
         self.chat_manager = StreamlitChatManager()
+        self.indexer = indexer
         
         # RAGパイプラインとIndexerを初期化
         self._initialize_qa_system()
@@ -253,12 +255,13 @@ class MainView(CancellableOperation):
             config_manager = ConfigManager()
             config = config_manager.load_config()
             
-            # ChromaDBインデクサー初期化
-            self.indexer = ChromaDBIndexer(
-                collection_name="knowledge_base",
-                db_path=config.chroma_db_path,
-                embedding_model=config.ollama_model
-            )
+            # ChromaDBインデクサーが渡されていない場合のみ初期化
+            if self.indexer is None:
+                self.indexer = ChromaDBIndexer(
+                    collection_name="knowledge_base", 
+                    db_path=config.chroma_db_path,
+                    embedding_model="nomic-embed-text"
+                )
             
             # RAGパイプライン初期化
             self.rag_pipeline = RAGPipeline(
