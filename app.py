@@ -25,6 +25,7 @@ from src.ui.settings_view import SettingsView
 from src.logic.config_manager import ConfigManager
 from src.logic.indexing import ChromaDBIndexer  
 from src.logic.qa import QAService
+from src.logic.ollama_checker import OllamaModelChecker
 from src.exceptions.base_exceptions import (
     LocalKnowledgeAgentError, create_error_handler, ErrorMessages
 )
@@ -49,6 +50,9 @@ class LocalKnowledgeAgentApp:
         
         # 各種マネージャーとサービスを初期化
         self._initialize_services()
+        
+        # Ollamaモデルチェッカー初期化
+        self.ollama_checker = OllamaModelChecker()
     
     def _initialize_services(self) -> None:
         """サービス層の初期化"""
@@ -56,9 +60,14 @@ class LocalKnowledgeAgentApp:
             with log_performance("app_initialization"):
                 # 設定管理
                 self.config_manager = ConfigManager()
+                config = self.config_manager.load_config()
                 
-                # インデックス管理
-                self.indexer = ChromaDBIndexer()
+                # インデックス管理（Configから埋め込みモデルを取得）
+                self.indexer = ChromaDBIndexer(
+                    collection_name=config.chroma_collection_name,
+                    db_path=config.chroma_db_path,
+                    embedding_model=config.embedding_model
+                )
                 
                 # QA サービス
                 self.qa_service = QAService(
@@ -88,6 +97,10 @@ class LocalKnowledgeAgentApp:
             # 環境検証
             self._validate_environment()
             
+            # Ollamaモデルチェック
+            if not self._check_ollama_models():
+                return  # モデル不足の場合は処理を停止
+            
             # セッションステート初期化
             init_session_state()
             
@@ -114,6 +127,73 @@ class LocalKnowledgeAgentApp:
             # デバッグ情報（開発時のみ）
             if st.checkbox("詳細なエラー情報を表示", key="show_error_details"):
                 st.exception(e)
+    
+    def _check_ollama_models(self) -> bool:
+        """
+        Ollamaの必須モデルをチェック
+        
+        Returns:
+            bool: すべての必須モデルが利用可能な場合True
+        """
+        try:
+            self.logger.info("Ollamaモデルチェックを開始")
+            check_result = self.ollama_checker.check_required_models()
+            
+            if check_result.is_available:
+                self.logger.info("すべての必須モデルが利用可能です")
+                return True
+            
+            # モデル不足の場合の処理
+            self.logger.warning(f"必須モデル不足: {len(check_result.missing_models)}個")
+            self._show_model_installation_guide(check_result)
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Ollamaモデルチェック中にエラー: {e}")
+            st.error("Ollamaモデルの確認中にエラーが発生しました")
+            return False
+    
+    def _show_model_installation_guide(self, check_result) -> None:
+        """
+        モデルインストールガイドを表示
+        
+        Args:
+            check_result: モデルチェック結果
+        """
+        st.set_page_config(
+            page_title="LocalKnowledgeAgent - モデルセットアップ",
+            page_icon="🚨",
+            layout="centered"
+        )
+        
+        st.title("🚨 必須モデルのセットアップが必要です")
+        
+        if not check_result.ollama_connected:
+            st.error("**Ollamaサーバーに接続できません**")
+            st.markdown("""
+            **解決方法:**
+            1. Ollamaがインストールされているか確認してください
+            2. Ollamaサービスが起動しているか確認してください
+            3. コマンドで `ollama serve` を実行してみてください
+            """)
+            return
+        
+        # インストールガイド表示
+        guide_text = self.ollama_checker.get_installation_guide(check_result.missing_models)
+        st.markdown(guide_text)
+        
+        # 利用可能モデル表示
+        if check_result.available_models:
+            with st.expander("現在利用可能なモデル"):
+                for model in check_result.available_models:
+                    st.text(f"✅ {model}")
+        
+        # 再チェックボタン
+        if st.button("🔄 再チェック", use_container_width=True):
+            st.rerun()
+        
+        st.markdown("---")
+        st.info("**注意:** モデルのダウンロードには時間がかかる場合があります。インストール完了後、このページを再読み込みしてください。")
     
     def _validate_environment(self) -> None:
         """環境変数とシステム要件を検証"""

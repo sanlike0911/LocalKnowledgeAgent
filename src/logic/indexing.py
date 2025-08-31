@@ -17,6 +17,7 @@ from src.exceptions.base_exceptions import IndexingError
 from src.utils.structured_logger import get_logger
 from src.utils.progress_utils import ProgressTracker, should_show_progress
 from src.utils.cancellation_utils import CancellableOperation
+from src.security.file_validator import FileValidator
 
 
 class ChromaDBIndexer(CancellableOperation):
@@ -90,6 +91,9 @@ class ChromaDBIndexer(CancellableOperation):
             length_function=len,
             separators=["\n\n", "\n", " ", ""]
         )
+        
+        # セキュリティバリデーター初期化
+        self.file_validator = FileValidator()
         
         self.logger.info(f"ChromaDBIndexer初期化完了", extra={
             "collection_name": collection_name,
@@ -396,6 +400,16 @@ class ChromaDBIndexer(CancellableOperation):
             if not document.content:
                 if document.file_path:
                     file_path = Path(document.file_path)
+                    
+                    # セキュリティ検証
+                    is_valid, error_msg = self.file_validator.validate_file(str(file_path))
+                    if not is_valid:
+                        raise IndexingError(
+                            f"ファイル検証エラー: {error_msg}",
+                            error_code="IDX-008",
+                            details={"file_path": str(file_path), "validation_error": error_msg}
+                        )
+                    
                     if document.file_type.lower() == 'pdf':
                         content = self._read_pdf_file(file_path)
                     elif document.file_type.lower() == 'txt':
@@ -644,6 +658,9 @@ class ChromaDBIndexer(CancellableOperation):
         """
         コレクション内の全ドキュメントをクリア
         
+        ChromaDB v1.0.17以降では空のwhere条件による削除が制限されているため、
+        コレクション再作成による全削除を実行
+        
         Returns:
             bool: クリア成功フラグ
         """
@@ -651,16 +668,52 @@ class ChromaDBIndexer(CancellableOperation):
             # コレクション内のドキュメント数を確認
             doc_count = self.collection.count()
             
-            if doc_count > 0:
-                # 全ドキュメントを削除
-                self.collection.delete(
-                    where={}  # 空の条件で全削除
-                )
+            if doc_count == 0:
+                self.logger.info(f"コレクションは既に空です", extra={
+                    "collection_name": self.collection_name
+                })
+                return True
             
-            self.logger.info(f"コレクションクリア完了", extra={
-                "collection_name": self.collection_name,
-                "deleted_documents": doc_count
-            })
+            # ChromaDB v1.0.17以降での全削除方法
+            # 方法1: 全ドキュメントのIDを取得して削除
+            try:
+                # 全IDを取得
+                result = self.collection.get()
+                all_ids = result.get('ids', [])
+                
+                if all_ids:
+                    # IDによる削除実行
+                    self.collection.delete(ids=all_ids)
+                    self.logger.info(f"IDによる全削除完了", extra={
+                        "collection_name": self.collection_name,
+                        "deleted_documents": len(all_ids)
+                    })
+                else:
+                    self.logger.info(f"削除対象のIDが見つかりませんでした", extra={
+                        "collection_name": self.collection_name
+                    })
+                    
+            except Exception as delete_error:
+                # 方法2: コレクション再作成による全削除
+                self.logger.warning(f"ID削除失敗、コレクション再作成を実行: {delete_error}")
+                
+                # 現在のコレクション設定を保存
+                original_name = self.collection_name
+                
+                # コレクションを削除
+                self.client.delete_collection(name=original_name)
+                
+                # 同じ名前でコレクションを再作成
+                self.collection = self.client.create_collection(
+                    name=original_name,
+                    embedding_function=self._embedding_function,
+                    metadata={"hnsw:space": "cosine"}
+                )
+                
+                self.logger.info(f"コレクション再作成による全削除完了", extra={
+                    "collection_name": self.collection_name,
+                    "deleted_documents": doc_count
+                })
             
             return True
             

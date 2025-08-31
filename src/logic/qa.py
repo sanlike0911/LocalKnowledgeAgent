@@ -228,11 +228,12 @@ class OllamaQAEngine(CancellableOperation):
             params = {**self.default_params, **model_params}
             self._validate_model_parameters(params)
             
-            # リクエストペイロードを構築
+            # リクエストペイロードを構築（日本語強制）
             payload = {
                 "model": self.model_name,
                 "prompt": prompt,
                 "stream": False,
+                "system": "You are a helpful assistant that MUST respond in Japanese only. 必ず日本語で回答してください。Never use English.",
                 "options": params
             }
             
@@ -327,11 +328,12 @@ class OllamaQAEngine(CancellableOperation):
             params = {**self.default_params, **model_params}
             self._validate_model_parameters(params)
             
-            # ストリーミングリクエストペイロード
+            # ストリーミングリクエストペイロード（日本語強制）
             payload = {
                 "model": self.model_name,
                 "prompt": prompt,
                 "stream": True,
+                "system": "You are a helpful assistant that MUST respond in Japanese only. 必ず日本語で回答してください。Never use English.",
                 "options": params
             }
             
@@ -421,8 +423,8 @@ class RAGPipeline(CancellableOperation):
         # Ollama QAエンジンを初期化
         self.qa_engine = OllamaQAEngine(model_name)
         
-        # プロンプトテンプレート
-        self.qa_prompt_template = """日本語で回答してください。
+        # プロンプトテンプレート（日本語強制）
+        self.qa_prompt_template = """IMPORTANT: You MUST respond in Japanese only. 必ず日本語で回答してください。
 
 以下のコンテキスト情報を参考にして、ユーザーの質問に正確で有用な回答を提供してください。
 
@@ -435,9 +437,10 @@ class RAGPipeline(CancellableOperation):
 【回答要求】
 - 提供されたコンテキスト情報に基づいて回答してください
 - コンテキストにない情報については「提供された情報では確認できません」と明記してください
-- 日本語で分かりやすく回答してください
+- 必ず日本語で分かりやすく回答してください（日本語回答を強制）
 - 回答の根拠となった情報源（ファイル名）を明記してください
 - 可能な限り具体的で詳細な回答を心がけてください
+- Remember: JAPANESE ONLY, NO ENGLISH ALLOWED
 
 【回答】"""
         
@@ -601,8 +604,8 @@ class RAGPipeline(CancellableOperation):
         Returns:
             str: 生成されたプロンプト
         """
-        # ドキュメントなしの場合のプロンプトテンプレート
-        direct_prompt_template = """日本語で回答してください。
+        # ドキュメントなしの場合のプロンプトテンプレート（日本語強制）
+        direct_prompt_template = """IMPORTANT: You MUST respond in Japanese only. 必ず日本語で回答してください。
 
 以下の質問に、あなたの知識に基づいて分かりやすく回答してください。
 
@@ -610,10 +613,11 @@ class RAGPipeline(CancellableOperation):
 {query}
 
 【回答要求】
-- 日本語で分かりやすく回答してください
+- 必ず日本語で分かりやすく回答してください（日本語回答を強制）
 - 知識ベースに参考資料がないため、一般的な知識に基づいて回答します
 - 不明な点については正直に「わからない」と答えてください
 - 可能な限り有用で建設的な回答を心がけてください
+- Remember: JAPANESE ONLY, NO ENGLISH ALLOWED
 
 【回答】"""
         

@@ -205,7 +205,7 @@ class SettingsView:
             elif current_status == "created" and index_stats['document_count'] > 0:
                 st.success("✅ インデックスは正常に作成されています。チャット機能が利用可能です。")
             elif current_status == "error":
-                st.error("❌ インデックス作成でエラーが発生しました。再作成をお試しください。")
+                st.error("❌ インデックス作成でエラーが発生しました。インデックスを削除してから再作成をお試しください。")
             elif current_status == "creating":
                 st.info("⏳ インデックスを作成中です。しばらくお待ちください。")
             
@@ -350,6 +350,22 @@ class SettingsView:
                     help="Ollamaで使用するモデル名を指定してください（例: llama3:8b, codellama）"
                 )
                 
+                # 埋め込みモデル名
+                embedding_model = st.selectbox(
+                    "埋め込み（ベクトル変換）用モデル",
+                    options=[
+                        "nomic-embed-text",
+                        "mxbai-embed-large", 
+                        "all-minilm",
+                        "snowflake-arctic-embed"
+                    ],
+                    index=0 if config.embedding_model == "nomic-embed-text" else 
+                          (1 if config.embedding_model == "mxbai-embed-large" else
+                           (2 if config.embedding_model == "all-minilm" else
+                            (3 if config.embedding_model == "snowflake-arctic-embed" else 0))),
+                    help="ドキュメントのベクトル変換に使用するモデルを選択してください"
+                )
+                
                 st.subheader("データベース設定") 
                 
                 # ベクトルストアパス
@@ -363,17 +379,18 @@ class SettingsView:
                 submitted = st.form_submit_button("設定を保存", type="primary", use_container_width=True)
                 
                 if submitted:
-                    self._handle_config_save(config, ollama_model, chroma_db_path)
+                    self._handle_config_save(config, ollama_model, embedding_model, chroma_db_path)
                     
         except Exception as e:
             st.error(f"設定表示中にエラーが発生しました: {str(e)}")
     
-    def _validate_config_input(self, ollama_model: str, chroma_db_path: str) -> bool:
+    def _validate_config_input(self, ollama_model: str, embedding_model: str, chroma_db_path: str) -> bool:
         """
         設定入力値の検証
         
         Args:
             ollama_model: LLMモデル名
+            embedding_model: 埋め込みモデル名
             chroma_db_path: ベクトルストアパス
             
         Returns:
@@ -381,6 +398,10 @@ class SettingsView:
         """
         if not ollama_model or not ollama_model.strip():
             st.error("LLMモデル名を入力してください")
+            return False
+            
+        if not embedding_model or not embedding_model.strip():
+            st.error("埋め込みモデル名を選択してください")
             return False
             
         if not chroma_db_path or not chroma_db_path.strip():
@@ -401,23 +422,25 @@ class SettingsView:
             
         return True
     
-    def _handle_config_save(self, current_config: Config, ollama_model: str, chroma_db_path: str) -> None:
+    def _handle_config_save(self, current_config: Config, ollama_model: str, embedding_model: str, chroma_db_path: str) -> None:
         """
         設定保存処理
         
         Args:
             current_config: 現在の設定
             ollama_model: LLMモデル名
+            embedding_model: 埋め込みモデル名
             chroma_db_path: ベクトルストアパス
         """
         try:
-            if not self._validate_config_input(ollama_model, chroma_db_path):
+            if not self._validate_config_input(ollama_model, embedding_model, chroma_db_path):
                 return
                 
             updated_config = Config(
                 selected_folders=current_config.selected_folders,
                 chroma_db_path=chroma_db_path.strip(),
-                ollama_model=ollama_model.strip()
+                ollama_model=ollama_model.strip(),
+                embedding_model=embedding_model.strip()
             )
             
             self.config_interface.save_config(updated_config)
@@ -429,6 +452,7 @@ class SettingsView:
                 error_code="CFG_SAVE_FAILED",
                 details={
                     "ollama_model": ollama_model,
+                    "embedding_model": embedding_model,
                     "chroma_db_path": chroma_db_path
                 }
             )

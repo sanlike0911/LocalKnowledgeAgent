@@ -18,6 +18,7 @@ from src.logic.indexing import ChromaDBIndexer
 from src.logic.config_manager import ConfigManager
 from src.exceptions.base_exceptions import QAError, IndexingError, ConfigError
 from src.utils.structured_logger import get_logger
+from src.security.xss_protection import sanitize_user_input
 from src.utils.progress_utils import ProgressTracker, should_show_progress
 from src.utils.cancellation_utils import CancellableOperation
 
@@ -83,18 +84,65 @@ class StreamlitChatManager:
         
         with st.expander(f"📚 参考ソース ({len(sources)}件)", expanded=False):
             for i, source in enumerate(sources, 1):
-                filename = source.get('filename', '不明なファイル')
+                # ChromaDBから取得したmetadataを確認
+                metadata = source.get('metadata', {})
+                filename = metadata.get('document_filename') or source.get('filename', '不明なファイル')
                 distance = source.get('distance', 0.0)
                 preview = source.get('content_preview', '')
                 
+                # ファイル名表示の改善
+                if filename == '不明なファイル' or filename == '不明':
+                    # メタデータから他の情報を試す
+                    chunk_index = metadata.get('chunk_index', 0)
+                    filename = f"文書 {i} (チャンク{chunk_index})"
+                
                 st.markdown(f"**{i}. {filename}**")
-                st.markdown(f"類似度: {(1-distance)*100:.1f}%")
+                
+                # 距離値から類似度への変換を改善
+                similarity_score = self._calculate_similarity_score(distance)
+                st.markdown(f"類似度: {similarity_score}")
                 
                 if preview:
                     st.markdown(f"内容: {preview}")
                 
                 if i < len(sources):
                     st.markdown("---")
+    
+    def _calculate_similarity_score(self, distance: float) -> str:
+        """
+        距離値から類似度スコアを計算
+        
+        Args:
+            distance: ChromaDBから返される距離値
+            
+        Returns:
+            str: フォーマットされた類似度表示
+        """
+        try:
+            # 距離値の範囲チェック
+            if distance < 0:
+                return "計算不可 (負の距離値)"
+            elif distance > 100:
+                # 異常に大きな距離値の場合、正規化を試みる
+                # ChromaDBのコサイン距離は通常0-2の範囲だが、
+                # 異常値の場合は別の計算方式を使用
+                if distance > 1000:
+                    return "低 (距離値異常)"
+                else:
+                    # 正規化を試す
+                    normalized_distance = min(distance / 100.0, 2.0)
+                    similarity_percent = max(0, (2.0 - normalized_distance) / 2.0 * 100)
+                    return f"{similarity_percent:.1f}% (正規化済み)"
+            elif distance <= 2.0:
+                # 正常な範囲の距離値（コサイン距離：0-2）
+                similarity_percent = max(0, (2.0 - distance) / 2.0 * 100)
+                return f"{similarity_percent:.1f}%"
+            else:
+                # 2を超える場合
+                return f"低 (距離値: {distance:.2f})"
+                
+        except Exception as e:
+            return f"計算エラー ({str(e)})"
     
     def add_user_message(self, message: str) -> None:
         """
@@ -338,12 +386,20 @@ class MainView(CancellableOperation):
             user_input: ユーザー入力
         """
         try:
-            # ユーザーメッセージを履歴に追加
-            self.chat_manager.add_user_message(user_input)
+            # XSS対策：入力をサニタイズ
+            sanitized_input = sanitize_user_input(user_input, allow_markdown=False)
+            if sanitized_input != user_input:
+                self.logger.warning("ユーザー入力をサニタイズしました", extra={
+                    "original_length": len(user_input),
+                    "sanitized_length": len(sanitized_input)
+                })
+            
+            # ユーザーメッセージを履歴に追加（サニタイズ済み）
+            self.chat_manager.add_user_message(sanitized_input)
             
             # ユーザーメッセージを即座に表示
             with st.chat_message("user"):
-                st.write(user_input)
+                st.write(sanitized_input)
             
             # QAシステムが利用可能かチェック
             if not self.rag_pipeline:
@@ -351,11 +407,11 @@ class MainView(CancellableOperation):
                     st.error("QAシステムが利用できません。システム管理者にお問い合わせください。")
                 return
             
-            # ストリーミング対応の回答生成
+            # ストリーミング対応の回答生成（サニタイズ済み入力を使用）
             if getattr(self.config, 'enable_streaming', True):
-                self._process_streaming_question(user_input)
+                self._process_streaming_question(sanitized_input)
             else:
-                self._process_standard_question(user_input)
+                self._process_standard_question(sanitized_input)
                 
         except Exception as e:
             self.logger.error(f"ユーザー入力処理エラー: {e}")

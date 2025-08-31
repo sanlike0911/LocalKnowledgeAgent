@@ -30,6 +30,7 @@ class Config:
     Attributes:
         ollama_host: Ollamaサーバーホスト
         ollama_model: 使用するOllamaモデル名
+        embedding_model: 埋め込み（ベクトル変換）用モデル名
         chroma_db_path: ChromaDBのデータベースパス
         chroma_collection_name: ChromaDBコレクション名
         max_chat_history: 最大チャット履歴数
@@ -41,10 +42,12 @@ class Config:
         log_level: ログレベル
         upload_folder: アップロードフォルダパス
         temp_folder: 一時フォルダパス
+        force_japanese_response: 日本語固定回答制御フラグ
     """
 
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "llama3:8b"
+    embedding_model: str = "nomic-embed-text"
     chroma_db_path: str = "./data/chroma_db"
     chroma_collection_name: str = "knowledge_base"
     max_chat_history: int = 50
@@ -58,6 +61,7 @@ class Config:
     log_level: str = "INFO"
     upload_folder: str = "./uploads"
     temp_folder: str = "./temp"
+    force_japanese_response: bool = True  # 日本語固定回答制御
 
     def __post_init__(self) -> None:
         """データクラス初期化後の検証処理"""
@@ -70,6 +74,9 @@ class Config:
 
         if not self.ollama_model or not self.ollama_model.strip():
             raise ConfigValidationError("ollama_modelは必須です")
+
+        if not self.embedding_model or not self.embedding_model.strip():
+            raise ConfigValidationError("embedding_modelは必須です")
 
         if self.max_chat_history <= 0:
             raise ConfigValidationError("max_chat_historyは1以上である必要があります")
@@ -106,6 +113,7 @@ class Config:
         return {
             "ollama_host": self.ollama_host,
             "ollama_model": self.ollama_model,
+            "embedding_model": self.embedding_model,
             "chroma_db_path": self.chroma_db_path,
             "chroma_collection_name": self.chroma_collection_name,
             "max_chat_history": self.max_chat_history,
@@ -117,6 +125,7 @@ class Config:
             "log_level": self.log_level,
             "upload_folder": self.upload_folder,
             "temp_folder": self.temp_folder,
+            "force_japanese_response": self.force_japanese_response,
         }
 
     @classmethod
@@ -133,6 +142,7 @@ class Config:
         return cls(
             ollama_host=data.get("ollama_host", "http://localhost:11434"),
             ollama_model=data.get("ollama_model", "llama3:8b"),
+            embedding_model=data.get("embedding_model", "nomic-embed-text"),
             chroma_db_path=data.get("chroma_db_path", "./data/chroma_db"),
             chroma_collection_name=data.get("chroma_collection_name", "knowledge_base"),
             max_chat_history=data.get("max_chat_history", 50),
@@ -146,6 +156,7 @@ class Config:
             log_level=data.get("log_level", "INFO"),
             upload_folder=data.get("upload_folder", "./uploads"),
             temp_folder=data.get("temp_folder", "./temp"),
+            force_japanese_response=data.get("force_japanese_response", True),
         )
 
     def save_to_file(self, file_path: str) -> None:

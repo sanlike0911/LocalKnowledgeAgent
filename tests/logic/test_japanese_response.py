@@ -169,11 +169,11 @@ class TestJapaneseResponseControl:
         
         # 通常のQAプロンプト
         qa_prompt = rag_pipeline._create_qa_prompt(test_query, test_context)
-        assert qa_prompt.startswith("日本語で回答してください。")
+        assert qa_prompt.startswith("IMPORTANT: You MUST respond in Japanese only.")
         
         # 直接QAプロンプト
         direct_prompt = rag_pipeline._create_direct_qa_prompt(test_query)
-        assert direct_prompt.startswith("日本語で回答してください。")
+        assert direct_prompt.startswith("IMPORTANT: You MUST respond in Japanese only.")
     
     def test_conversation_history_with_japanese_instruction(self, rag_pipeline):
         """会話履歴がある場合でも日本語指示が維持されることを確認"""
