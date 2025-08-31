@@ -5,6 +5,7 @@ import os
 
 from src.logic.config_manager import ConfigManager
 from src.logic.indexing import ChromaDBIndexer
+from src.logic.ollama_model_service import OllamaModelService, OllamaConnectionError
 from src.models.config import Config
 from src.exceptions.base_exceptions import (
     ConfigError, IndexingError, ConfigValidationError, 
@@ -15,6 +16,7 @@ class SettingsView:
     def __init__(self, config_interface: ConfigManager, indexing_interface: ChromaDBIndexer):
         self.config_interface = config_interface
         self.indexing_interface = indexing_interface
+        self.ollama_service = OllamaModelService()
 
     @create_error_handler("config")
     def render(self) -> None:
@@ -343,12 +345,8 @@ class SettingsView:
             with st.form("app_settings_form"):
                 st.subheader("モデル設定")
                 
-                # LLMモデル名
-                ollama_model = st.text_input(
-                    "LLMモデル名", 
-                    value=config.ollama_model,
-                    help="Ollamaで使用するモデル名を指定してください（例: llama3:8b, codellama）"
-                )
+                # LLMモデル名（動的取得）
+                ollama_model = self._render_llm_model_selector(config.ollama_model)
                 
                 # 埋め込みモデル名
                 embedding_model = st.selectbox(
@@ -455,4 +453,69 @@ class SettingsView:
                     "embedding_model": embedding_model,
                     "chroma_db_path": chroma_db_path
                 }
+            )
+    
+    def _render_llm_model_selector(self, current_model: str) -> str:
+        """
+        動的LLMモデル選択セレクターをレンダリング
+        
+        Args:
+            current_model: 現在選択されているモデル名
+            
+        Returns:
+            str: 選択されたモデル名
+        """
+        try:
+            # フォールバックモデル一覧（API接続失敗時に使用）
+            fallback_models = [
+                "llama3:8b",
+                "llama3:70b", 
+                "mistral:latest",
+                "codellama:13b",
+                "gemma:2b",
+                "gemma:7b"
+            ]
+            
+            # Ollamaから利用可能モデルを取得（フォールバック付き）
+            available_models = self.ollama_service.get_available_models_with_fallback(fallback_models)
+            
+            # 現在のモデルがリストにない場合は追加
+            if current_model and current_model not in available_models:
+                available_models.insert(0, current_model)
+            
+            # モデルリストが空の場合のデフォルト
+            if not available_models:
+                available_models = fallback_models
+            
+            # 現在のモデルのインデックスを取得
+            try:
+                current_index = available_models.index(current_model) if current_model in available_models else 0
+            except (ValueError, IndexError):
+                current_index = 0
+            
+            # セレクターをレンダリング
+            selected_model = st.selectbox(
+                "LLM（大規模言語）モデル",
+                options=available_models,
+                index=current_index,
+                help="チャット応答に使用するLLMモデルを選択してください。リストはOllamaから自動取得されます。"
+            )
+            
+            # 接続状態の表示
+            try:
+                # 実際にOllamaサーバーから最新情報を取得してステータス表示
+                test_models = self.ollama_service.get_available_models()
+                st.success(f"✅ Ollama接続成功 ({len(test_models)}モデル利用可能)")
+            except OllamaConnectionError:
+                st.warning("⚠️ Ollama接続失敗 - デフォルトモデル一覧を表示")
+            
+            return selected_model
+            
+        except Exception as e:
+            # 予期しないエラーの場合は安全なフォールバック
+            st.error(f"モデル選択での予期しないエラー: {str(e)}")
+            return st.text_input(
+                "LLMモデル名（手動入力）",
+                value=current_model,
+                help="自動取得に失敗したため、手動でモデル名を入力してください"
             )
