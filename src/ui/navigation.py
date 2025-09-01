@@ -38,7 +38,7 @@ class Navigation:
         """
         try:
             # サイドバーヘッダー
-            st.sidebar.title("📚 LocalKnowledgeAgent")
+            st.sidebar.title("📚 LocalNotebookLM")
             st.sidebar.markdown("---")
             
             # ナビゲーション
