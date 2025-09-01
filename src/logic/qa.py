@@ -637,51 +637,17 @@ class RAGPipeline(CancellableOperation):
         
         return prompt
 
-    def _check_embedding_model_compatibility(self) -> None:
+    def _call_llm(self, prompt: str) -> QAResponse:
         """
-        現在の設定とインデックスの埋め込みモデルの互換性をチェック
+        LLMを呼び出してレスポンスを生成
         
-        Raises:
-            QAError: モデルが不一致の場合
-        """
-        try:
-            # ChromaDB v0.4.15以降では、collection.metadataで直接メタデータを取得できる
-            collection_metadata = self.indexer.collection.metadata
-            if not collection_metadata:
-                self.logger.warning("コレクションのメタデータを取得できませんでした。互換性チェックをスキップします。")
-                return
-
-            indexed_model = collection_metadata.get("embedding_model")
-            current_model = self.indexer.embedding_model
+        Args:
+            prompt: 入力プロンプト
             
-            # メタデータにモデル情報がない場合はチェックをスキップ
-            if not indexed_model:
-                self.logger.warning("インデックスに埋め込みモデル情報がありません。互換性チェックをスキップします。")
-                return
-
-            if indexed_model != current_model:
-                error_msg = f"設定中の埋め込みモデル（{current_model}）が、データベースの作成に使用されたモデル（{indexed_model}）と異なります。"
-                user_notification = f"埋め込みモデルは「{indexed_model}」を利用してください。設定画面でモデルを合わせるか、現在の設定でインデックスを再作成してください。"
-                
-                self.logger.error(error_msg, extra={"current_model": current_model, "indexed_model": indexed_model})
-                
-                raise QAError(
-                    user_notification, # ユーザーに直接表示するメッセージ
-                    error_code="QA-011",
-                    details={
-                        "internal_message": error_msg,
-                        "current_model": current_model,
-                        "indexed_model": indexed_model,
-                        "user_notification": user_notification
-                    }
-                )
-        except QAError:
-            raise # QAErrorはそのまま再スロー
-        except Exception as e:
-            self.logger.error(f"埋め込みモデル互換性チェック中に予期せぬエラー: {e}", exc_info=True)
-            # 互換性チェックはクリティカルパスではないため、エラーが発生しても処理を続行させる
-            # ただし、警告はログに残す
-            self.logger.warning("埋め込みモデルの互換性チェックに失敗しましたが、処理を続行します。")
+        Returns:
+            QAResponse: LLMレスポンス
+        """
+        return self.qa_engine.generate_response(prompt)
 
     def _call_llm(self, prompt: str) -> QAResponse:
         """
@@ -721,103 +687,6 @@ class RAGPipeline(CancellableOperation):
         start_time = time.time()
         
         try:
-            # 仕様2: 埋め込みモデルの互換性チェック
-            self._check_embedding_model_compatibility()
-
-            self.check_cancellation()
-            
-            self.logger.info(f"質問応答開始", extra={
-                "query": query,
-                "top_k": top_k
-            })
-
-    def _check_embedding_model_compatibility(self) -> None:
-        """
-        現在の設定とインデックスの埋め込みモデルの互換性をチェック
-        
-        Raises:
-            QAError: モデルが不一致の場合
-        """
-        try:
-            # ChromaDB v0.4.15以降では、collection.metadataで直接メタデータを取得できる
-            collection_metadata = self.indexer.collection.metadata
-            if not collection_metadata:
-                self.logger.warning("コレクションのメタデータを取得できませんでした。互換性チェックをスキップします。")
-                return
-
-            indexed_model = collection_metadata.get("embedding_model")
-            current_model = self.indexer.embedding_model
-            
-            # メタデータにモデル情報がない場合はチェックをスキップ
-            if not indexed_model:
-                self.logger.warning("インデックスに埋め込みモデル情報がありません。互換性チェックをスキップします。")
-                return
-
-            if indexed_model != current_model:
-                error_msg = f"設定中の埋め込みモデル（{current_model}）が、データベースの作成に使用されたモデル（{indexed_model}）と異なります。"
-                user_notification = f"埋め込みモデルは「{indexed_model}」を利用してください。設定画面でモデルを合わせるか、現在の設定でインデックスを再作成してください。"
-                
-                self.logger.error(error_msg, extra={"current_model": current_model, "indexed_model": indexed_model})
-                
-                raise QAError(
-                    user_notification, # ユーザーに直接表示するメッセージ
-                    error_code="QA-011",
-                    details={
-                        "internal_message": error_msg,
-                        "current_model": current_model,
-                        "indexed_model": indexed_model,
-                        "user_notification": user_notification
-                    }
-                )
-        except QAError:
-            raise # QAErrorはそのまま再スロー
-        except Exception as e:
-            self.logger.error(f"埋め込みモデル互換性チェック中に予期せぬエラー: {e}", exc_info=True)
-            # 互換性チェックはクリティカルパスではないため、エラーが発生しても処理を続行させる
-            # ただし、警告はログに残す
-            self.logger.warning("埋め込みモデルの互換性チェックに失敗しましたが、処理を続行します。")
-
-    def _call_llm(self, prompt: str) -> QAResponse:
-        """
-        LLMを呼び出してレスポンスを生成
-        
-        Args:
-            prompt: 入力プロンプト
-            
-        Returns:
-            QAResponse: LLMレスポンス
-        """
-        return self.qa_engine.generate_response(prompt)
-    
-    @measure_function("rag_pipeline_answer_question")
-    def answer_question(
-        self,
-        query: str,
-        conversation_history: Optional[List[Dict[str, str]]] = None,
-        top_k: int = 5,
-        min_similarity_threshold: float = 0.0
-    ) -> Dict[str, Any]:
-        """
-        質問に対する回答を生成
-        
-        Args:
-            query: ユーザー質問
-            conversation_history: 会話履歴
-            top_k: 検索上位K件
-            min_similarity_threshold: 最小類似度閾値
-            
-        Returns:
-            Dict[str, Any]: QA結果
-            
-        Raises:
-            QAError: 回答生成エラー
-        """
-        start_time = time.time()
-        
-        try:
-            # 仕様2: 埋め込みモデルの互換性チェック
-            self._check_embedding_model_compatibility()
-
             self.check_cancellation()
             
             self.logger.info(f"質問応答開始", extra={
