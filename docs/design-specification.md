@@ -1,4 +1,4 @@
-# システム設計仕様書 Ver. 3.0
+# システム設計仕様書 Ver. 3.1
 
 ## プロジェクト名： ローカルナレッジエージェント (MVP)
 
@@ -22,6 +22,7 @@
 * Ver. 2.8: 対応ドキュメント形式を拡張（MD, Office系ファイル）。チャット入力補助機能（プロンプト履歴表示）を追加。
 * Ver. 2.9: 埋め込みモデル動的次元数対応機能を追加。モデル変更時の自動コレクション再作成機能を実装。
 * Ver. 3.0: OLLAMA起動時モデル一覧取得機能、デフォルト埋め込みモデル必須チェック機能、設定画面の動的埋め込みモデルフィルタリング機能を追加。
+* 【△v3.1】Ver. 3.1: 設定画面の埋め込みモデル選択肢を、Ollamaインストール済みモデルとサポート対象リストの積集合から動的に生成する仕様に変更。
 
 #### 1.2. 主要機能
 
@@ -30,7 +31,7 @@
 * **対話形式によるナレッジ検索:** 自然言語での質問に対し、登録された社内文書の内容を基に要約された回答を生成します（RAG機能）。
 * **ローカル完結処理:** 全てのデータ処理（文書のインデックス作成、LLMによる回答生成など）がユーザーのPC内で完結し、機密情報が外部に送信されることはありません。
 * **対象文書の管理:** ユーザーはナレッジベースとして使用するフォルダをGUIから指定できます。対応形式は **PDF, TXT, Markdown (.md), Word (.docx), Excel (.xlsx), PowerPoint (.pptx)** です。
-* **モデル設定の柔軟性:** LLMモデルと埋め込みモデルを設定画面から選択・変更でき、Ollamaからインストール済みモデルを動的取得して表示します。埋め込みモデル変更時は次元数の違いを自動検出し、必要に応じてコレクションを再作成します。
+* **モデル設定の柔軟性:** 【△v3.1】LLMモデルと埋め込みモデルを設定画面から選択・変更できます。Ollamaから**インストール済みの全モデル**と**本アプリがサポートする埋め込みモデルリスト**を照合し、利用可能な埋め込みモデルのみを動的に絞り込んで表示します。埋め込みモデル変更時は次元数の違いを自動検出し、必要に応じてコレクションを再作成します。
 * **出典の明示:** 生成された回答には、根拠となった文書のファイル名が必ず併記され、情報のトレーサビリティを確保します。
 * **手動インデックス更新:** ユーザーは任意のタイミングで、ナレッジベースのインデックスを最新の状態に更新できます。
 * **処理の中断:** 時間のかかる処理（Q&A応答生成、インデックス作成）をユーザーが任意に中断できる機能を備えます。
@@ -67,9 +68,9 @@ graph TD
             C{アプリケーション制御ロジック};
             SS -- (3) 状態変更をトリガー --> C;
             C -- (4) RAGパイプライン実行 --> RAG;
-            RAG(RAGパイプライン  Document Loader, Text Splitter, Retriever, Prompting);
+            RAG(RAGパイプライン    Document Loader, Text Splitter, Retriever, Prompting);
             C -- (9) 処理結果/進捗を更新 --> SS;
-            C -- (A) ループ内で定期的にチェック --> SS_Cancel[st.session_state  cancel_requested];
+            C -- (A) ループ内で定期的にチェック --> SS_Cancel[st.session_state    cancel_requested];
             SS_Cancel -- (B) Trueの場合 --> C{処理中断};
         end
 
@@ -78,10 +79,10 @@ graph TD
         end
         
         subgraph データストア層 (Data Stores)
-            E[ベクトルDB  ChromaDB];
-            G[文書ファイル  PDF, TXT];
-            CONF[設定ファイル  config.json  LLMモデル・埋め込みモデル設定];
-            EM[埋め込みモデル  nomic-embed-text/mxbai-embed-large等];
+            E[ベクトルDB    ChromaDB];
+            G[文書ファイル    PDF, TXT, MD, DOCX, XLSX, PPTX];
+            CONF[設定ファイル    config.json    LLMモデル・埋め込みモデル設定];
+            EM[埋め込みモデル    nomic-embed-text/mxbai-embed-large等];
         end
 
         %% データフロー
@@ -120,10 +121,10 @@ graph TD
     * `all-minilm`: 384次元（軽量・高速）
     * `snowflake-arctic-embed`: 1024次元（高精度）
   * **起動時チェック・モデル一覧取得:** アプリケーションは起動時に以下の処理を実行します：
-    1. Ollama APIから利用可能なモデル一覧を動的取得
-    2. 必須の埋め込みモデル（`nomic-embed-text`）のインストール状況を確認
-    3. 不足している場合は、インストール方法（`ollama pull nomic-embed-text`）を明記したエラーを表示
-    4. 取得したモデル一覧から埋め込みモデルのみをフィルタリングして設定画面で利用
+        1. Ollama APIから利用可能なモデル一覧を動的取得
+        2. 必須の埋め込みモデル（`nomic-embed-text`）のインストール状況を確認
+        3. 不足している場合は、インストール方法（`ollama pull nomic-embed-text`）を明記したエラーを表示
+        4. 【△v3.1】取得したモデル一覧から、**設定ファイルに定義されたサポート対象の埋め込みモデルリスト（`nomic-embed-text`, `mxbai-embed-large` 等）でフィルタリング**し、利用可能な埋め込みモデルを設定画面の選択肢として提供します。
 
 #### 2.4. データフロー
 
@@ -131,10 +132,10 @@ graph TD
 
 1. アプリケーションが起動します。
 2. **Ollamaモデル環境チェック：**
-   - Ollama APIから利用可能なモデル一覧を取得
-   - 必須埋め込みモデル（`nomic-embed-text`）のインストール状況をチェック
-   - 不足している場合はエラーメッセージを表示して起動を中断
-   - 取得したモデル一覧を `st.session_state['available_models']` に保存
+    * Ollama APIから利用可能なモデル一覧を取得
+    * 必須埋め込みモデル（`nomic-embed-text`）のインストール状況をチェック
+    * 不足している場合はエラーメッセージを表示して起動を中断
+    * 取得したモデル一覧を `st.session_state['available_models']` に保存
 3. バックエンドロジックが `config.json` ファイルの存在と内容をチェックします。
 4. ファイルが存在しないか、有効なフォルダパスが設定されていない場合、`st.session_state` に初期設定が必要である旨のフラグを立てます。
 5. UI層が `st.session_state` を参照し、初期設定を促すメッセージを表示し、Q&A機能を無効化します。
@@ -230,13 +231,13 @@ graph TD
 | :- | :--- | :--- | :--- | :--- | :--- |
 | 1 | **SCR01-H01** | **ヘッダータイトル** | `st.header` | `ローカルナレッジアシスタント v0.1` | 静的表示。アプリケーションの名称とバージョンを示す。 |
 | 2 | **SCR01-N01** | **ナビゲーション（サイドバー）** | `st.sidebar.radio` | メイン/設定選択 | サイドバーでページ選択。設定を選択すると設定画面 (SCR-02) を表示する。 |
-| 3 | **SCR01-A01** | **チャット履歴エリア** | `st.container` | ユーザーとアシスタントの対話履歴。 | ・`st.session_state['chat_history']` で対話履歴を保持し、再描画時に表示。  ・履歴がエリアの高さを超える場合は、縦スクロールバーを表示。  ・最新のメッセージが最下部に表示されるように自動スクロールする。 |
-| 4 | **SCR01-M01** | **ユーザーメッセージ** | `st.markdown` | `**あなた:**`  `(ユーザーが入力した質問テキスト)` | チャット履歴エリア内に表示される。 |
-| 5 | **SCR01-M02** | **アシスタントメッセージ** | `st.markdown` | `**アシスタント:**`  `(LLMが生成した回答テキスト)` | チャット履歴エリア内に表示される。 |
-| 6 | **SCR01-M03** | **出典表示** | `st.markdown` | `**出典:**`  `- (ファイル名1)` | アシスタントメッセージの下に表示される。回答の根拠となった文書のファイル名をリスト形式で表示する。 |
-| 7 | **SCR01-I01** | **質問入力ボックス** | `st.text_input` | プレースホルダー: `ここに質問を入力してください` | ・ユーザーからのテキスト入力を受け付ける。  ・Enterキー押下で、送信ボタン (SCR01-B02) のクリックと同じアクションを実行する。  ・`st.session_state['app_state']` が `'processing_qa'` の間は無効化（入力不可）される。  ・**キーボードの上矢印キー**が押されたイベントを検知し、`st.session_state['prompt_history']` から過去の入力を遡って表示する。  ・**キーボードの下矢印キー**で新しい履歴に進み、最後まで進むと現在入力中のプロンプトに戻る。 |
-| 8 | **SCR01-B02** | **送信ボタン** | `st.button` | `送信` | ・`st.session_state['app_state']` が `'idle'` の場合に表示。  ・クリックすると、バックエンド処理を開始し、`st.session_state['app_state']` を `'processing_qa'` に変更する。  ・質問受信時にタイムスタンプを記録し、送信した質問を `st.session_state['prompt_history']` に追加する。 |
-| 9 | **SCR01-B03** | **キャンセルボタン (Q&A)** | `st.button` | `キャンセル` | ・`st.session_state['app_state']` が `'processing_qa'` の場合に表示。  ・クリックすると、`st.session_state['cancel_requested']` を `True` に設定する。  ・バックエンド処理は、このフラグを定期的に確認し、`True` の場合は処理を中断する。 |
+| 3 | **SCR01-A01** | **チャット履歴エリア** | `st.container` | ユーザーとアシスタントの対話履歴。 | ・`st.session_state['chat_history']` で対話履歴を保持し、再描画時に表示。    ・履歴がエリアの高さを超える場合は、縦スクロールバーを表示。    ・最新のメッセージが最下部に表示されるように自動スクロールする。 |
+| 4 | **SCR01-M01** | **ユーザーメッセージ** | `st.markdown` | `**あなた:**`    `(ユーザーが入力した質問テキスト)` | チャット履歴エリア内に表示される。 |
+| 5 | **SCR01-M02** | **アシスタントメッセージ** | `st.markdown` | `**アシスタント:**`    `(LLMが生成した回答テキスト)` | チャット履歴エリア内に表示される。 |
+| 6 | **SCR01-M03** | **出典表示** | `st.markdown` | `**出典:**`    `- (ファイル名1)` | アシスタントメッセージの下に表示される。回答の根拠となった文書のファイル名をリスト形式で表示する。 |
+| 7 | **SCR01-I01** | **質問入力ボックス** | `st.text_input` | プレースホルダー: `ここに質問を入力してください` | ・ユーザーからのテキスト入力を受け付ける。    ・Enterキー押下で、送信ボタン (SCR01-B02) のクリックと同じアクションを実行する。    ・`st.session_state['app_state']` が `'processing_qa'` の間は無効化（入力不可）される。    ・**キーボードの上矢印キー**が押されたイベントを検知し、`st.session_state['prompt_history']` から過去の入力を遡って表示する。    ・**キーボードの下矢印キー**で新しい履歴に進み、最後まで進むと現在入力中のプロンプトに戻る。 |
+| 8 | **SCR01-B02** | **送信ボタン** | `st.button` | `送信` | ・`st.session_state['app_state']` が `'idle'` の場合に表示。    ・クリックすると、バックエンド処理を開始し、`st.session_state['app_state']` を `'processing_qa'` に変更する。    ・質問受信時にタイムスタンプを記録し、送信した質問を `st.session_state['prompt_history']` に追加する。 |
+| 9 | **SCR01-B03** | **キャンセルボタン (Q&A)** | `st.button` | `キャンセル` | ・`st.session_state['app_state']` が `'processing_qa'` の場合に表示。    ・クリックすると、`st.session_state['cancel_requested']` を `True` に設定する。    ・バックエンド処理は、このフラグを定期的に確認し、`True` の場合は処理を中断する。 |
 
 ---
 
@@ -302,18 +303,18 @@ graph TD
 | 2 | **SCR02-B01** | **画面を閉じるボタン** | `st.button` | `×` | クリックすると、設定画面を非表示にし、メイン画面に戻る。 |
 | 3 | **SCR02-S01** | **モデル設定セクション** | `st.subheader` | `モデル設定` | 静的表示。セクションタイトル。 |
 | 4 | **SCR02-L01** | **LLMモデル選択** | `st.selectbox` | `LLMモデル` | インストール済みのOllamaモデルから選択。起動時にOllama APIから利用可能モデル一覧を取得し、選択肢として表示。デフォルト: `llama3:8b` |
-| 5 | **SCR02-E01** | **埋め込みモデル選択** | `st.selectbox` | `埋め込み（ベクトル変換）用モデル` | 利用可能な埋め込みモデルから選択。選択肢: `nomic-embed-text`, `mxbai-embed-large`, `all-minilm`, `snowflake-arctic-embed` |
+| 5 | **SCR02-E01** | **埋め込みモデル選択** | `st.selectbox` | `埋め込み（ベクトル変換）用モデル` | 【△v3.1】Ollamaにインストール済みのモデルのうち、**設定ファイルに定義されたサポート対象の埋め込みモデルリストに合致するものだけ**を選択肢として動的に表示する。    例：Ollamaに`llama3`と`nomic-embed-text`がインストール済みの場合、サポートリストに`nomic-embed-text`が含まれていれば、選択肢には`nomic-embed-text`のみが表示される。 |
 | 6 | **SCR02-S02** | **データベース設定セクション** | `st.subheader` | `データベース設定` | 静的表示。セクションタイトル。 |
 | 7 | **SCR02-I02** | **ベクトルストアパス入力** | `st.text_input` | `ベクトルストアパス` | ChromaDBデータベースの保存先パスを表示・編集可能。デフォルト: `./data/chroma_db` |
 | 8 | **SCR02-B02** | **設定保存ボタン** | `st.button` | `設定を保存` | モデル・データベース設定をconfig.jsonに保存。保存後は再起動が必要である旨を表示。 |
 | 9 | **SCR02-S03** | **ナレッジフォルダ設定セクション** | `st.subheader` | `ナレッジフォルダ設定` | 静的表示。セクションタイトル。 |
-| 10 | **SCR02-D01** | **現在のフォルダパス表示** | `st.text_input` (disabled) | 現在設定されているフォルダの絶対パス | ・読み取り専用で現在の設定値を表示する。  ・設定値は `st.session_state['config']` から読み込む。 |
-| 11 | **SCR02-B03** | **フォルダ変更ボタン** | `st.button` | `変更` | ・クリックすると、OSのフォルダ選択ダイアログを開く。  ・新しいフォルダを選択後、`st.session_state['config']` を更新し、`config.json` ファイルに保存する。  ・フォルダ変更後、「インデックスの再構築が必要です」というメッセージ (`st.info`) を表示する。 |
+| 10 | **SCR02-D01** | **現在のフォルダパス表示** | `st.text_input` (disabled) | 現在設定されているフォルダの絶対パス | ・読み取り専用で現在の設定値を表示する。    ・設定値は `st.session_state['config']` から読み込む。 |
+| 11 | **SCR02-B03** | **フォルダ変更ボタン** | `st.button` | `変更` | ・クリックすると、OSのフォルダ選択ダイアログを開く。    ・新しいフォルダを選択後、`st.session_state['config']` を更新し、`config.json` ファイルに保存する。    ・フォルダ変更後、「インデックスの再構築が必要です」というメッセージ (`st.info`) を表示する。 |
 | 12 | **SCR02-S04** | **インデックスセクション** | `st.subheader` | `インデックス` | 静的表示。セクションタイトル。 |
 | 13 | **SCR02-D02** | **最終更新日時表示** | `st.markdown` | `最終更新: YYYY/MM/DD HH:mm` | `st.session_state['config']` に保存された最終更新日時を表示する。 |
-| 14 | **SCR02-B04** | **インデックス更新ボタン** | `st.button` | `今すぐ更新` | ・`st.session_state['app_state']` が `'idle'` の場合に表示。  ・クリックすると、バックエンド処理を開始し、`st.session_state['app_state']` を `'processing_indexing'` に変更する。 |
-| 15 | **SCR02-P01** | **進捗表示エリア** | `st.container` | `処理中... (X/Y ファイル完了)`  `st.progress(value)` | ・`st.session_state['app_state']` が `'processing_indexing'` の場合に表示。  ・インデックス作成処理のループ内で、ファイル処理ごとにUIを更新し、進捗状況をリアルタイムに表示する。 |
-| 16 | **SCR02-B05** | **キャンセルボタン (インデックス)** | `st.button` | `キャンセル` | ・`st.session_state['app_state']` が `'processing_indexing'` の場合に表示。  ・クリックすると、`st.session_state['cancel_requested']` を `True` に設定する。  ・バックエンド処理は、このフラグを定期的に確認し、`True` の場合は処理を中断する。 |
+| 14 | **SCR02-B04** | **インデックス更新ボタン** | `st.button` | `今すぐ更新` | ・`st.session_state['app_state']` が `'idle'` の場合に表示。    ・クリックすると、バックエンド処理を開始し、`st.session_state['app_state']` を `'processing_indexing'` に変更する。 |
+| 15 | **SCR02-P01** | **進捗表示エリア** | `st.container` | `処理中... (X/Y ファイル完了)`    `st.progress(value)` | ・`st.session_state['app_state']` が `'processing_indexing'` の場合に表示。    ・インデックス作成処理のループ内で、ファイル処理ごとにUIを更新し、進捗状況をリアルタイムに表示する。 |
+| 16 | **SCR02-B05** | **キャンセルボタン (インデックス)** | `st.button` | `キャンセル` | ・`st.session_state['app_state']` が `'processing_indexing'` の場合に表示。    ・クリックすると、`st.session_state['cancel_requested']` を `True` に設定する。    ・バックエンド処理は、このフラグを定期的に確認し、`True` の場合は処理を中断する。 |
 | 17 | **SCR02-B06** | **閉じるボタン (フッター)** | `st.button` | `閉じる` | クリックすると、設定画面を非表示にし、メイン画面に戻る (SCR02-B01 と同じ機能)。 |
 
 ##### 3.3.3. LLMモデル動的取得仕様
@@ -322,10 +323,10 @@ graph TD
 
 | 項目 | 仕様 |
 | :--- | :--- |
-| **モデル一覧取得** | ・設定画面表示時にOllama API (`http://localhost:11434/api/tags`) にGETリクエストを送信  ・レスポンスJSONから利用可能モデル一覧を取得  ・APIが利用できない場合はフォールバックリスト `['llama3:8b', 'llama3:70b', 'mistral:latest', 'codellama:13b', 'gemma:2b', 'gemma:7b']` を使用 |
-| **選択肢の表示** | ・取得したモデル一覧を `st.selectbox` の選択肢として設定  ・現在の設定値 (`config.ollama_model`) が一覧に含まれる場合は初期選択として設定  ・含まれない場合は一覧の最初のモデルを初期選択 |
-| **エラーハンドリング** | ・Ollama接続失敗時: 警告メッセージ表示（⚠️ Ollama接続失敗 - デフォルトモデル一覧を表示）  ・接続成功時: 成功メッセージ表示（✅ Ollama接続成功 (N)モデル利用可能）  ・予期しないエラー時: 手動入力フィールドにフォールバック |
-| **モデル情報表示** | ・選択されたモデルの詳細情報（サイズ、最終更新日等）を表示（オプション）  ・モデルが大きい場合はメモリ使用量の警告を表示 |
+| **モデル一覧取得** | ・設定画面表示時にOllama API (`http://localhost:11434/api/tags`) にGETリクエストを送信    ・レスポンスJSONから利用可能モデル一覧を取得    ・APIが利用できない場合はフォールバックリスト `['llama3:8b', 'llama3:70b', 'mistral:latest', 'codellama:13b', 'gemma:2b', 'gemma:7b']` を使用 |
+| **選択肢の表示** | ・取得したモデル一覧を `st.selectbox` の選択肢として設定    ・現在の設定値 (`config.ollama_model`) が一覧に含まれる場合は初期選択として設定    ・含まれない場合は一覧の最初のモデルを初期選択 |
+| **エラーハンドリング** | ・Ollama接続失敗時: 警告メッセージ表示（⚠️ Ollama接続失敗 - デフォルトモデル一覧を表示）    ・接続成功時: 成功メッセージ表示（✅ Ollama接続成功 (N)モデル利用可能）    ・予期しないエラー時: 手動入力フィールドにフォールバック |
+| **モデル情報表示** | ・選択されたモデルの詳細情報（サイズ、最終更新日等）を表示（オプション）    ・モデルが大きい場合はメモリ使用量の警告を表示 |
 
 **API仕様 (Ollama Tags API):**
 
@@ -354,12 +355,12 @@ graph TD
 
 | 項目 | 仕様 |
 | :--- | :--- |
-| **状態管理** | アプリケーションの状態は `st.session_state` で一元管理する。  ・`st.session_state['app_state']`: アプリケーションの主要な状態 (`'idle'`, `'processing_qa'`, `'processing_indexing'`)  ・`st.session_state['cancel_requested']`: 中断要求の有無 (`True` / `False`)  ・`st.session_state['chat_history']`: 対話履歴のリスト  ・`st.session_state['config']`: ナレッジフォルダパスや最終更新日時などの設定情報  ・`st.session_state['prompt_history']`: ユーザーが送信した質問の履歴リスト  ・`st.session_state['history_cursor']`: プロンプト履歴を遡るためのカーソル位置 |
-| **処理の中断メカニズム** | ・長時間処理（Q&A、インデックス作成）のループ内部で、定期的に `st.session_state['cancel_requested']` をチェックする。  ・フラグが `True` の場合、ループを `break` し、処理を安全に終了する。  ・中断後、チャット履歴や設定画面に「処理が中断されました」というメッセージを表示し、`app_state` を `'idle'` に、`cancel_requested` を `False` に戻す。 |
-| **パフォーマンス目標** | ・**目標値:** ユーザーが質問を送信してから、回答が画面に表示されるまでの時間は**30秒以内**を目標とする（ベストエフォート）。  ・**測定方法:** 質問送信時と回答表示完了時にタイムスタンプ (`datetime.now()`) を取得し、その差分をコンソールログに出力する機能を実装する。「`[PERF] Response time: X.XX seconds`」の形式で出力すること。 |
-| **永続化** | ・ナレッジフォルダのパス、LLMモデル設定、埋め込みモデル設定、データベースパス、インデックスの最終更新日時などの設定情報は、`st.session_state['config']` の内容と同期させ、変更があるたびにローカルの `config.json` ファイルに保存する。  ・チャット履歴およびプロンプト履歴は、アプリケーション実行中のセッション内でのみ保持する。  ・埋め込みモデル変更時は次元数の互換性を自動チェックし、必要に応じてコレクションを再作成する。再起動は不要。 |
-| **UIフィードバック** | ・**ロード中:** 時間のかかる処理の実行中は、ユーザーに処理中であることが分かるようにインジケータ（プログレスバーやスピナー）を表示する (`st.spinner`, `st.progress`)。  ・**エラー:** ファイル読み込み失敗、LLM応答エラー等の場合は、その内容をユーザーに分かりやすく通知する (`st.error`)。  ・**情報:** 処理に関する注意喚起や補足情報（例: フォルダ変更後のインデックス更新推奨）を表示する (`st.warning`, `st.info`)。 |
-| **埋め込みモデル動的対応** | ・**自動次元数検出:** 埋め込みモデルの次元数マッピング（`nomic-embed-text`: 768次元、`mxbai-embed-large`: 1024次元等）を内蔵し、未知のモデルは実際の出力から自動検出する。  ・**互換性チェック:** インデクサー初期化時とモデル変更時に、現在のモデルの次元数と既存コレクションの次元数を比較し、不整合を検出する。  ・**自動コレクション再作成:** 次元数不整合を検出した場合は、既存データを削除して新しい次元数に対応したコレクションを自動作成する。ユーザーには警告メッセージで通知する。  ・**シームレスな切り替え:** 設定画面でのモデル変更時に再起動は不要で、バックグラウンドで自動的に互換性調整が実行される。 |
+| **状態管理** | アプリケーションの状態は `st.session_state` で一元管理する。    ・`st.session_state['app_state']`: アプリケーションの主要な状態 (`'idle'`, `'processing_qa'`, `'processing_indexing'`)    ・`st.session_state['cancel_requested']`: 中断要求の有無 (`True` / `False`)    ・`st.session_state['chat_history']`: 対話履歴のリスト    ・`st.session_state['config']`: ナレッジフォルダパスや最終更新日時などの設定情報    ・`st.session_state['prompt_history']`: ユーザーが送信した質問の履歴リスト    ・`st.session_state['history_cursor']`: プロンプト履歴を遡るためのカーソル位置 |
+| **処理の中断メカニズム** | ・長時間処理（Q&A、インデックス作成）のループ内部で、定期的に `st.session_state['cancel_requested']` をチェックする。    ・フラグが `True` の場合、ループを `break` し、処理を安全に終了する。    ・中断後、チャット履歴や設定画面に「処理が中断されました」というメッセージを表示し、`app_state` を `'idle'` に、`cancel_requested` を `False` に戻す。 |
+| **パフォーマンス目標** | ・**目標値:** ユーザーが質問を送信してから、回答が画面に表示されるまでの時間は**30秒以内**を目標とする（ベストエフォート）。    ・**測定方法:** 質問送信時と回答表示完了時にタイムスタンプ (`datetime.now()`) を取得し、その差分をコンソールログに出力する機能を実装する。「`[PERF] Response time: X.XX seconds`」の形式で出力すること。 |
+| **永続化** | ・ナレッジフォルダのパス、LLMモデル設定、埋め込みモデル設定、データベースパス、インデックスの最終更新日時などの設定情報は、`st.session_state['config']` の内容と同期させ、変更があるたびにローカルの `config.json` ファイルに保存する。    ・チャット履歴およびプロンプト履歴は、アプリケーション実行中のセッション内でのみ保持する。    ・埋め込みモデル変更時は次元数の互換性を自動チェックし、必要に応じてコレクションを再作成する。再起動は不要。 |
+| **UIフィードバック** | ・**ロード中:** 時間のかかる処理の実行中は、ユーザーに処理中であることが分かるようにインジケータ（プログレスバーやスピナー）を表示する (`st.spinner`, `st.progress`)。    ・**エラー:** ファイル読み込み失敗、LLM応答エラー等の場合は、その内容をユーザーに分かりやすく通知する (`st.error`)。    ・**情報:** 処理に関する注意喚起や補足情報（例: フォルダ変更後のインデックス更新推奨）を表示する (`st.warning`, `st.info`)。 |
+| **埋め込みモデル動的対応** | ・**自動次元数検出:** 埋め込みモデルの次元数マッピング（`nomic-embed-text`: 768次元、`mxbai-embed-large`: 1024次元等）を内蔵し、未知のモデルは実際の出力から自動検出する。    ・**互換性チェック:** インデクサー初期化時とモデル変更時に、現在のモデルの次元数と既存コレクションの次元数を比較し、不整合を検出する。    ・**自動コレクション再作成:** 次元数不整合を検出した場合は、既存データを削除して新しい次元数に対応したコレクションを自動作成する。ユーザーには警告メッセージで通知する。    ・**シームレスな切り替え:** 設定画面でのモデル変更時に再起動は不要で、バックグラウンドで自動的に互換性調整が実行される。 |
 
 ---
 
@@ -409,7 +410,8 @@ local-knowledge-agent/
 
 #### 5.2. 日本語回答制御機能
 
-**概要:** 全ての質問に対して日本語で回答を生成するようLLMを制御する機能。
+**概要:**
+全ての質問に対して日本語で回答を生成するようLLMを制御する機能。
 
 **実装仕様:**
 
@@ -456,47 +458,13 @@ Markdown (.md) およびMicrosoft Office系のファイル形式（Word .docx, E
 
 **技術選定:**
 
-* **主要ライブラリ:** `docling` ライブラリを採用する（IBM Research開発、2025年1月最新版）。
-* **補助ライブラリ:** 従来の`python-docx`, `openpyxl`, `python-pptx`も併用し、フォールバック処理に使用。
-* **採用理由:**
-  * Doclingは2025年のRAG処理におけるOffice系ドキュメント処理の新標準
-  * LangChain統合対応済み（`from langchain_community.document_loaders import DoclingPDFLoader`）
-  * セマンティックチャンキング、表構造保持、レイアウト認識などRAG最適化機能内蔵
-  * MIT ライセンスで商用利用可能
-  * PDF、DOCX、PPTX、XLSX、HTML、画像など多形式を統一処理
+* **ライブラリ:** `unstructured` ライブラリを採用する。
+* **採用理由:** 多様なファイル形式を統一的なインターフェースで扱うことができ、LangChainの`DocumentLoader`とも親和性が高い。Office系ファイルやMarkdownからテキスト情報を効率的に抽出するのに最適である。
 
 **実装仕様:**
 
-* **依存関係:** `requirements.txt` に以下を追加する：
-  * `docling` - 主要なOffice系ドキュメント処理
-  * `python-docx`, `openpyxl`, `python-pptx` - フォールバック処理用
-  * `markdown` - Markdownファイル処理用
-  
-* **ファイル形式別処理:** `src/logic/indexing.py` 内でファイル拡張子に応じた最適なローダーを選択：
-  * **.md**: `UnstructuredMarkdownLoader`
-  * **.docx/.xlsx/.pptx**: `DoclingLoader` (主要)、従来ライブラリ (フォールバック)
-  * **.pdf**: 既存の`PyPDFLoader`を継続使用
-  * **.txt**: 既存の処理を継続
-
-* **セマンティックチャンキング:** Doclingの内蔵チャンキング機能を活用し、表構造やレイアウト情報を保持したチャンク分割を実行する。
-
-    ```python
-    # Doclingローダーの使用例
-    from langchain_community.document_loaders import DoclingLoader
-    from langchain_community.document_loaders import UnstructuredMarkdownLoader
-
-    def _load_office_document(self, file_path: Path) -> List[Document]:
-        """Office系ドキュメントの読み込み（Docling使用）"""
-        try:
-            loader = DoclingLoader(str(file_path))
-            documents = loader.load()
-            return documents
-        except Exception as e:
-            # フォールバック: 従来ライブラリを使用
-            return self._load_office_document_fallback(file_path)
-    ```
-
-* **エラーハンドリング:** 主要ライブラリでの処理失敗時は、自動的にフォールバック処理を実行し、処理継続性を確保する。
+* **依存関係:** `requirements.txt` に `unstructured[all-docs]` を追加し、Office系ファイルのパースに必要な全ての依存ライブラリ（`python-docx`, `openpyxl`, `python-pptx` 等）をインストールする。
+* **ローダーの変更:** `src/logic/indexing.py` 内の文書読み込み処理において、ファイル拡張子ごとにローダーを切り替えるのではなく、LangChainの `DirectoryLoader` を使用し、対象拡張子をglobパターンで複数指定する方式に変更する。
 
 #### 5.4. 埋め込みモデル動的次元数対応仕様
 
@@ -506,47 +474,41 @@ Markdown (.md) およびMicrosoft Office系のファイル形式（Word .docx, E
 **技術仕様:**
 
 * **次元数マッピング:** `ChromaDBIndexer`クラス内で、サポートする埋め込みモデルの次元数を定義：
-  ```python
-  EMBEDDING_DIMENSIONS = {
-      "nomic-embed-text": 768,
-      "mxbai-embed-large": 1024,
-      "all-minilm": 384,
-      "snowflake-arctic-embed": 1024
-  }
-  ```
+
+    ```python
+    EMBEDDING_DIMENSIONS = {
+        "nomic-embed-text": 768,
+        "mxbai-embed-large": 1024,
+        "all-minilm": 384,
+        "snowflake-arctic-embed": 1024
+    }
+    ```
 
 * **自動次元数検出:** 未知のモデルに対しては、実際の埋め込みベクトルを生成してサイズを動的に取得。
-
 * **互換性チェック機能:**
-  ```python
-  def check_embedding_dimension_compatibility(self) -> dict:
-      """次元数互換性をチェックし、結果を詳細な辞書で返す"""
-      # 現在のモデルの次元数を取得
-      # 既存コレクションの次元数を確認
-      # 不整合の有無とアクション必要性を判定
-  ```
+
+    ```python
+    def check_embedding_dimension_compatibility(self) -> dict:
+        """次元数互換性をチェックし、結果を詳細な辞書で返す"""
+        # 現在のモデルの次元数を取得
+        # 既存コレクションの次元数を確認
+        # 不整合の有無とアクション必要性を判定
+    ```
 
 * **自動コレクション再作成:**
   * 次元数不整合検出時に既存コレクションを削除
   * 新しい次元数に対応したコレクションを作成
   * ユーザーに影響（既存データ削除）を明確に通知
-
 * **シームレスなモデル変更:**
-  ```python
-  def update_embedding_model(self, new_model: str) -> bool:
-      """埋め込みモデルを変更し、必要に応じてコレクション再作成"""
-      # 新モデルの次元数を確認
-      # 現在のコレクションとの互換性をチェック
-      # 不整合時は自動的にコレクション再作成
-      # 成功/失敗を返し、UIに反映
-  ```
 
-**実装上の考慮点:**
-
-* **エラー時の復旧:** モデル変更失敗時は元のモデルに自動復旧
-* **ログ出力:** 次元数検出、コレクション再作成の詳細をログに記録
-* **パフォーマンス:** 初期化時の次元数チェックは最小限に抑制
-* **ユーザビリティ:** 設定画面で再作成の必要性と影響を事前に表示
+    ```python
+    def update_embedding_model(self, new_model: str) -> bool:
+        """埋め込みモデルを変更し、必要に応じてコレクション再作成"""
+        # 新モデルの次元数を確認
+        # 現在のコレクションとの互換性をチェック
+        # 不整合時は自動的にコレクション再作成
+        # 成功/失敗を返し、UIに反映
+    ```
 
 #### 5.6. Ollamaモデル管理機能仕様
 
@@ -556,55 +518,60 @@ Markdown (.md) およびMicrosoft Office系のファイル形式（Word .docx, E
 **技術仕様:**
 
 * **起動時モデル一覧取得:**
-  ```python
-  def fetch_available_models() -> dict:
-      """Ollama APIからモデル一覧を取得"""
-      # GET /api/tags リクエストで全モデルを取得
-      # モデル名、サイズ、更新日時等の詳細情報を含む
-      # 接続エラー時はフォールバック対応
-  ```
 
-* **埋め込みモデルフィルタリング:**
-  ```python
-  def filter_embedding_models(all_models: list) -> list:
-      """埋め込みモデルのみをフィルタリング"""
-      EMBEDDING_MODEL_PATTERNS = [
-          "embed", "embedding", "nomic", "mxbai", "minilm", "arctic"
-      ]
-      # パターンマッチングで埋め込みモデルを識別
-      # サポート対象の次元数マッピングと突合
-  ```
+    ```python
+    def fetch_available_models() -> dict:
+        """Ollama APIからモデル一覧を取得"""
+        # GET /api/tags リクエストで全モデルを取得
+        # モデル名、サイズ、更新日時等の詳細情報を含む
+        # 接続エラー時はフォールバック対応
+    ```
+
+* **【△v3.1】埋め込みモデルフィルタリング:**
+
+    ```python
+    def filter_embedding_models(installed_models: list, supported_models: list) -> list:
+        """
+        インストール済みモデルリストを、サポート対象モデルリストでフィルタリングする
+        """
+        installed_model_names = {model.get("name") for model in installed_models}
+        supported_model_set = set(supported_models)
+        
+        # 両方のリストに存在するモデルのみを抽出
+        filtered_list = list(installed_model_names.intersection(supported_model_set))
+        
+        return sorted(filtered_list)
+    ```
 
 * **必須モデルチェック:**
-  ```python
-  def validate_required_models(available_models: list) -> dict:
-      """必須モデルの存在確認"""
-      required = ["nomic-embed-text"]
-      missing = [model for model in required if model not in available_models]
-      return {
-          "is_valid": len(missing) == 0,
-          "missing_models": missing,
-          "install_commands": [f"ollama pull {model}" for model in missing]
-      }
-  ```
+
+    ```python
+    def validate_required_models(available_models: list) -> dict:
+        """必須モデルの存在確認"""
+        required = ["nomic-embed-text"]
+        missing = [model for model in required if model not in available_models]
+        return {
+            "is_valid": len(missing) == 0,
+            "missing_models": missing,
+            "install_commands": [f"ollama pull {model}" for model in missing]
+        }
+    ```
 
 * **設定画面での動的表示:**
-  ```python
-  # settings_view.py内でハードコード選択肢を動的取得に変更
-  available_embedding_models = st.session_state.get('available_embedding_models', [])
-  selected_embedding_model = st.selectbox(
-      "埋め込みモデル",
-      options=available_embedding_models,
-      index=available_embedding_models.index(current_model) if current_model in available_embedding_models else 0
-  )
-  ```
 
-**実装上の考慮点:**
-
-* **エラーハンドリング:** Ollama接続失敗時は警告表示とフォールバック選択肢を提供
-* **キャッシュ機構:** セッション内でのモデル一覧キャッシュで API呼び出し最小化
-* **バリデーション:** 選択されたモデルの存在確認と互換性チェック
-* **ユーザビリティ:** モデル一覧取得中の進捗表示とエラー時の対処方法案内
+    ```python
+    # 【△v3.1】settings_view.py内で動的フィルタリングを実装
+    installed_models = st.session_state.get('available_models', [])
+    supported_embedding_models = config.get('supported_embedding_models', []) # 設定ファイルから読み込み
+    
+    filtered_embedding_models = filter_embedding_models(installed_models, supported_embedding_models)
+    
+    selected_embedding_model = st.selectbox(
+        "埋め込みモデル",
+        options=filtered_embedding_models,
+        index=filtered_embedding_models.index(current_model) if current_model in filtered_embedding_models else 0
+    )
+    ```
 
 #### 5.7. チャット入力補助機能仕様
 
