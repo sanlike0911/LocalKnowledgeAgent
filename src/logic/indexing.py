@@ -253,6 +253,94 @@ class ChromaDBIndexer(CancellableOperation):
                 details={"file_path": str(file_path), "original_error": str(e)}
             ) from e
     
+    def _read_markdown_file(self, file_path: Path) -> str:
+        """
+        Markdownファイルからテキストを読み込み
+        
+        Args:
+            file_path: Markdownファイルパス
+            
+        Returns:
+            str: ファイル内容（Markdown記法をプレーンテキストに変換）
+            
+        Raises:
+            IndexingError: ファイル読み込みエラー
+        """
+        try:
+            from langchain_community.document_loaders import UnstructuredMarkdownLoader
+            
+            # UnstructuredMarkdownLoaderを使用してMarkdownを読み込み
+            loader = UnstructuredMarkdownLoader(str(file_path))
+            documents = loader.load()
+            
+            if not documents:
+                raise IndexingError(
+                    f"Markdownファイルにコンテンツが見つかりません: {file_path}",
+                    error_code="IDX-009",
+                    details={"file_path": str(file_path)}
+                )
+            
+            # 複数のドキュメントが返される場合は結合
+            full_text = '\n\n'.join([doc.page_content for doc in documents if doc.page_content.strip()])
+            
+            if not full_text.strip():
+                raise IndexingError(
+                    f"Markdownファイルから有効なテキストを抽出できませんでした: {file_path}",
+                    error_code="IDX-009",
+                    details={"file_path": str(file_path)}
+                )
+            
+            self.logger.debug(f"Markdownファイル読み込み完了: {file_path.name}", extra={
+                "file_path": str(file_path),
+                "content_length": len(full_text),
+                "documents_count": len(documents)
+            })
+            
+            return full_text
+            
+        except Exception as e:
+            # UnstructuredMarkdownLoaderが使用できない場合のフォールバック
+            if "UnstructuredMarkdownLoader" in str(e) or "unstructured" in str(e).lower():
+                return self._read_markdown_file_fallback(file_path)
+            
+            raise IndexingError(
+                f"Markdownファイル読み込みエラー: {file_path} - {e}",
+                error_code="IDX-009",
+                details={"file_path": str(file_path), "original_error": str(e)}
+            ) from e
+    
+    def _read_markdown_file_fallback(self, file_path: Path) -> str:
+        """
+        Markdownファイル読み込みのフォールバック処理
+        
+        Args:
+            file_path: Markdownファイルパス
+            
+        Returns:
+            str: ファイル内容
+        """
+        try:
+            import markdown
+            
+            # ファイルを読み込み
+            content = self._read_txt_file(file_path)  # エンコーディング処理を再利用
+            
+            # MarkdownをHTMLに変換してからプレーンテキストに
+            md = markdown.Markdown(extensions=['extra', 'codehilite'])
+            html = md.convert(content)
+            
+            # HTMLタグを除去してプレーンテキストに変換
+            import re
+            plain_text = re.sub('<[^<]+?>', '', html)
+            plain_text = re.sub(r'\n\s*\n', '\n\n', plain_text)  # 連続する空行を整理
+            
+            return plain_text.strip()
+            
+        except Exception as e:
+            # 最終フォールバック: プレーンテキストとして読み込み
+            self.logger.warning(f"Markdownパース失敗、プレーンテキストとして処理: {file_path}")
+            return self._read_txt_file(file_path)
+    
     def _split_text_into_chunks(
         self,
         text: str,
@@ -308,7 +396,7 @@ class ChromaDBIndexer(CancellableOperation):
             elif file_ext == ".txt":
                 content = self._read_txt_file(file_path)
             elif file_ext == ".md":
-                content = self._read_txt_file(file_path)  # Markdownもテキストとして読み込み
+                content = self._read_markdown_file(file_path)  # Markdownファイル専用読み込み
             elif file_ext == ".docx":
                 content = self._read_docx_file(file_path)
             else:
@@ -396,6 +484,26 @@ class ChromaDBIndexer(CancellableOperation):
         try:
             self.check_cancellation()
             
+            # ISSUE-027対応: 埋め込み次元数の互換性チェック
+            compatibility_result = self.check_embedding_dimension_compatibility()
+            if not compatibility_result['is_compatible']:
+                if compatibility_result.get('needs_recreation', False):
+                    current_dim = compatibility_result.get('current_dimensions', '不明')
+                    expected_dim = compatibility_result.get('expected_dimensions', '不明')
+                    self.logger.warning(
+                        f"次元数不整合を検出、コレクションを再作成します: "
+                        f"現在={current_dim}, 期待={expected_dim}",
+                        extra=compatibility_result
+                    )
+                    self._recreate_collection_with_new_dimensions()
+                else:
+                    error_msg = compatibility_result.get('error', '次元数互換性チェックに失敗')
+                    raise IndexingError(
+                        f"埋め込み次元数互換性エラー: {error_msg}",
+                        error_code="IDX-027",
+                        details=compatibility_result
+                    )
+            
             # テキスト内容を取得
             if not document.content:
                 if document.file_path:
@@ -414,6 +522,10 @@ class ChromaDBIndexer(CancellableOperation):
                         content = self._read_pdf_file(file_path)
                     elif document.file_type.lower() == 'txt':
                         content = self._read_txt_file(file_path)
+                    elif document.file_type.lower() in ['md', 'markdown']:
+                        content = self._read_markdown_file(file_path)
+                    elif document.file_type.lower() == 'docx':
+                        content = self._read_docx_file(file_path)
                     else:
                         raise IndexingError(
                             f"サポートされていないファイル形式: {document.file_type}",
@@ -652,6 +764,150 @@ class ChromaDBIndexer(CancellableOperation):
                 f"ドキュメント削除エラー: {document_id} - {e}",
                 error_code="IDX-004",
                 details={"document_id": document_id, "original_error": str(e)}
+            ) from e
+    
+    def check_embedding_dimension_compatibility(self) -> dict:
+        """
+        埋め込み次元数の互換性をチェック (ISSUE-027対応)
+        
+        Returns:
+            dict: 互換性チェック結果
+        """
+        try:
+            result = {
+                'is_compatible': True,
+                'current_dimensions': None,
+                'expected_dimensions': None,
+                'needs_recreation': False,
+                'error': None
+            }
+            
+            # 現在の埋め込みモデルから次元数を取得
+            try:
+                test_embedding = self._embedding_function.embed_query("test")
+                result['current_dimensions'] = len(test_embedding)
+            except Exception as e:
+                result['error'] = f"埋め込みモデルテストに失敗: {e}"
+                result['is_compatible'] = False
+                return result
+            
+            # ChromaDBコレクションから期待される次元数を取得
+            count = self.collection.count()
+            if count > 0:
+                sample = self.collection.get(limit=1, include=['embeddings'])
+                embeddings = sample.get('embeddings', [])
+                if embeddings is not None and len(embeddings) > 0:
+                    first_embedding = embeddings[0]
+                    if first_embedding is not None and len(first_embedding) > 0:
+                        result['expected_dimensions'] = len(first_embedding)
+                        
+                        # 次元数の比較
+                        if result['current_dimensions'] != result['expected_dimensions']:
+                            result['is_compatible'] = False
+                            result['needs_recreation'] = True
+                            result['error'] = f"次元数不整合: 現在{result['current_dimensions']} vs 期待{result['expected_dimensions']}"
+            else:
+                # コレクションが空の場合は互換性チェック不要
+                result['expected_dimensions'] = result['current_dimensions']
+                
+            self.logger.info(f"埋め込み次元数互換性チェック完了", extra=result)
+            return result
+            
+        except Exception as e:
+            error_result = {
+                'is_compatible': False,
+                'error': f"互換性チェックエラー: {e}",
+                'needs_recreation': True
+            }
+            self.logger.error("埋め込み次元数互換性チェックに失敗", extra=error_result)
+            return error_result
+    
+    def recreate_collection_if_incompatible(self) -> bool:
+        """
+        次元数不整合時にコレクションを再作成 (ISSUE-027対応)
+        
+        Returns:
+            bool: 再作成実行フラグ
+        """
+        try:
+            compatibility = self.check_embedding_dimension_compatibility()
+            
+            if compatibility['needs_recreation']:
+                self.logger.warning(
+                    f"次元数不整合を検出、コレクションを再作成します: {compatibility['error']}"
+                )
+                
+                # コレクション削除
+                self.client.delete_collection(self.collection_name)
+                
+                # 新しいコレクションを作成
+                self.collection = self.client.create_collection(
+                    name=self.collection_name,
+                    embedding_function=self._embedding_function,
+                    metadata={"hnsw:space": "cosine"}
+                )
+                
+                self.logger.info(f"コレクション再作成完了: 新しい次元数 {compatibility['current_dimensions']}")
+                return True
+            else:
+                self.logger.info("次元数互換性は正常です")
+                return False
+                
+        except Exception as e:
+            raise IndexingError(
+                f"コレクション再作成エラー: {e}",
+                error_code="IDX_DIMENSION_RECREATE",
+                details={"original_error": str(e)}
+            ) from e
+    
+    def _recreate_collection_with_new_dimensions(self) -> None:
+        """
+        次元数不整合時にコレクションを再作成 (ISSUE-027対応)
+        
+        Raises:
+            IndexingError: コレクション再作成エラー
+        """
+        try:
+            # 現在のコレクション情報を保存
+            old_doc_count = self.collection.count() if self.collection else 0
+            
+            self.logger.info(
+                f"コレクション再作成開始: {self.collection_name}",
+                extra={"old_document_count": old_doc_count}
+            )
+            
+            # コレクション削除
+            try:
+                self.client.delete_collection(self.collection_name)
+                self.logger.info(f"旧コレクション削除完了: {self.collection_name}")
+            except Exception as e:
+                self.logger.warning(f"旧コレクション削除時の警告: {e}")
+            
+            # 新しいコレクションを作成
+            self.collection = self.client.create_collection(
+                name=self.collection_name,
+                embedding_function=self._embedding_function,
+                metadata={"hnsw:space": "cosine"}
+            )
+            
+            # 新しい次元数を取得して確認
+            test_embedding = self._embedding_function.embed_query("test")
+            new_dimensions = len(test_embedding)
+            
+            self.logger.info(
+                f"コレクション再作成完了: {self.collection_name}",
+                extra={
+                    "new_dimensions": new_dimensions,
+                    "old_document_count": old_doc_count,
+                    "collection_name": self.collection_name
+                }
+            )
+            
+        except Exception as e:
+            raise IndexingError(
+                f"コレクション再作成エラー: {e}",
+                error_code="IDX-027-RECREATE",
+                details={"collection_name": self.collection_name, "original_error": str(e)}
             ) from e
     
     def clear_collection(self) -> bool:

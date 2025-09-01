@@ -11,12 +11,14 @@ from src.exceptions.base_exceptions import (
     ConfigError, IndexingError, ConfigValidationError, 
     create_error_handler, ErrorMessages
 )
+from src.utils.structured_logger import get_logger
 
 class SettingsView:
     def __init__(self, config_interface: ConfigManager, indexing_interface: ChromaDBIndexer):
         self.config_interface = config_interface
         self.indexing_interface = indexing_interface
         self.ollama_service = OllamaModelService()
+        self.logger = get_logger(__name__)
 
     @create_error_handler("config")
     def render(self) -> None:
@@ -260,6 +262,14 @@ class SettingsView:
                 
                 # 実際のインデックス作成処理
                 with st.spinner("インデックスを作成しています。しばらくお待ちください..."):
+                    # ISSUE-027対応: 事前に次元数互換性チェック実行
+                    status_text.text("🔧 埋め込みモデル互換性チェック中...")
+                    try:
+                        self.indexing_interface.recreate_collection_if_incompatible()
+                    except Exception as dimension_error:
+                        self.logger.warning(f"次元数互換性チェック警告: {dimension_error}")
+                    
+                    status_text.text("📄 ドキュメントをインデックス化中...")
                     self.indexing_interface.rebuild_index_from_folders(config.selected_folders)
                 
                 progress_bar.progress(90)

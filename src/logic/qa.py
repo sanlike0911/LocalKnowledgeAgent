@@ -627,7 +627,7 @@ class RAGPipeline(CancellableOperation):
         # 会話履歴がある場合は追加
         if conversation_history:
             history_text = "\n【会話履歴】\n"
-            for msg in conversation_history[-5:]:  # 直近5件のみ
+            for msg in conversation_history[-5:]:
                 role = "ユーザー" if msg.get('role') == 'user' else "アシスタント"
                 content = msg.get('content', '')
                 history_text += f"{role}: {content}\n"
@@ -636,7 +636,53 @@ class RAGPipeline(CancellableOperation):
             prompt = prompt.replace("【質問】", f"{history_text}\n【質問】")
         
         return prompt
-    
+
+    def _check_embedding_model_compatibility(self) -> None:
+        """
+        現在の設定とインデックスの埋め込みモデルの互換性をチェック
+        
+        Raises:
+            QAError: モデルが不一致の場合
+        """
+        try:
+            # ChromaDB v0.4.15以降では、collection.metadataで直接メタデータを取得できる
+            collection_metadata = self.indexer.collection.metadata
+            if not collection_metadata:
+                self.logger.warning("コレクションのメタデータを取得できませんでした。互換性チェックをスキップします。")
+                return
+
+            indexed_model = collection_metadata.get("embedding_model")
+            current_model = self.indexer.embedding_model
+            
+            # メタデータにモデル情報がない場合はチェックをスキップ
+            if not indexed_model:
+                self.logger.warning("インデックスに埋め込みモデル情報がありません。互換性チェックをスキップします。")
+                return
+
+            if indexed_model != current_model:
+                error_msg = f"設定中の埋め込みモデル（{current_model}）が、データベースの作成に使用されたモデル（{indexed_model}）と異なります。"
+                user_notification = f"埋め込みモデルは「{indexed_model}」を利用してください。設定画面でモデルを合わせるか、現在の設定でインデックスを再作成してください。"
+                
+                self.logger.error(error_msg, extra={"current_model": current_model, "indexed_model": indexed_model})
+                
+                raise QAError(
+                    user_notification, # ユーザーに直接表示するメッセージ
+                    error_code="QA-011",
+                    details={
+                        "internal_message": error_msg,
+                        "current_model": current_model,
+                        "indexed_model": indexed_model,
+                        "user_notification": user_notification
+                    }
+                )
+        except QAError:
+            raise # QAErrorはそのまま再スロー
+        except Exception as e:
+            self.logger.error(f"埋め込みモデル互換性チェック中に予期せぬエラー: {e}", exc_info=True)
+            # 互換性チェックはクリティカルパスではないため、エラーが発生しても処理を続行させる
+            # ただし、警告はログに残す
+            self.logger.warning("埋め込みモデルの互換性チェックに失敗しましたが、処理を続行します。")
+
     def _call_llm(self, prompt: str) -> QAResponse:
         """
         LLMを呼び出してレスポンスを生成
@@ -675,6 +721,103 @@ class RAGPipeline(CancellableOperation):
         start_time = time.time()
         
         try:
+            # 仕様2: 埋め込みモデルの互換性チェック
+            self._check_embedding_model_compatibility()
+
+            self.check_cancellation()
+            
+            self.logger.info(f"質問応答開始", extra={
+                "query": query,
+                "top_k": top_k
+            })
+
+    def _check_embedding_model_compatibility(self) -> None:
+        """
+        現在の設定とインデックスの埋め込みモデルの互換性をチェック
+        
+        Raises:
+            QAError: モデルが不一致の場合
+        """
+        try:
+            # ChromaDB v0.4.15以降では、collection.metadataで直接メタデータを取得できる
+            collection_metadata = self.indexer.collection.metadata
+            if not collection_metadata:
+                self.logger.warning("コレクションのメタデータを取得できませんでした。互換性チェックをスキップします。")
+                return
+
+            indexed_model = collection_metadata.get("embedding_model")
+            current_model = self.indexer.embedding_model
+            
+            # メタデータにモデル情報がない場合はチェックをスキップ
+            if not indexed_model:
+                self.logger.warning("インデックスに埋め込みモデル情報がありません。互換性チェックをスキップします。")
+                return
+
+            if indexed_model != current_model:
+                error_msg = f"設定中の埋め込みモデル（{current_model}）が、データベースの作成に使用されたモデル（{indexed_model}）と異なります。"
+                user_notification = f"埋め込みモデルは「{indexed_model}」を利用してください。設定画面でモデルを合わせるか、現在の設定でインデックスを再作成してください。"
+                
+                self.logger.error(error_msg, extra={"current_model": current_model, "indexed_model": indexed_model})
+                
+                raise QAError(
+                    user_notification, # ユーザーに直接表示するメッセージ
+                    error_code="QA-011",
+                    details={
+                        "internal_message": error_msg,
+                        "current_model": current_model,
+                        "indexed_model": indexed_model,
+                        "user_notification": user_notification
+                    }
+                )
+        except QAError:
+            raise # QAErrorはそのまま再スロー
+        except Exception as e:
+            self.logger.error(f"埋め込みモデル互換性チェック中に予期せぬエラー: {e}", exc_info=True)
+            # 互換性チェックはクリティカルパスではないため、エラーが発生しても処理を続行させる
+            # ただし、警告はログに残す
+            self.logger.warning("埋め込みモデルの互換性チェックに失敗しましたが、処理を続行します。")
+
+    def _call_llm(self, prompt: str) -> QAResponse:
+        """
+        LLMを呼び出してレスポンスを生成
+        
+        Args:
+            prompt: 入力プロンプト
+            
+        Returns:
+            QAResponse: LLMレスポンス
+        """
+        return self.qa_engine.generate_response(prompt)
+    
+    @measure_function("rag_pipeline_answer_question")
+    def answer_question(
+        self,
+        query: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        top_k: int = 5,
+        min_similarity_threshold: float = 0.0
+    ) -> Dict[str, Any]:
+        """
+        質問に対する回答を生成
+        
+        Args:
+            query: ユーザー質問
+            conversation_history: 会話履歴
+            top_k: 検索上位K件
+            min_similarity_threshold: 最小類似度閾値
+            
+        Returns:
+            Dict[str, Any]: QA結果
+            
+        Raises:
+            QAError: 回答生成エラー
+        """
+        start_time = time.time()
+        
+        try:
+            # 仕様2: 埋め込みモデルの互換性チェック
+            self._check_embedding_model_compatibility()
+
             self.check_cancellation()
             
             self.logger.info(f"質問応答開始", extra={
@@ -731,16 +874,22 @@ class RAGPipeline(CancellableOperation):
             
             processing_time = time.time() - start_time
             
-            # 5. ソース情報を抽出
+            # 5. ソース情報を抽出 (ISSUE-025, ISSUE-026対応)
             sources = []
             for result in search_results:
                 metadata = result.get('metadata', {})
-                sources.append({
-                    'filename': metadata.get('filename', '不明'),
+                content = result.get('content', '')
+                
+                # メタデータとコンテンツ情報を含む改善されたソース情報を作成
+                source_info = {
+                    'metadata': metadata,  # 完全なメタデータを保持
+                    'filename': metadata.get('document_filename') or metadata.get('filename', '不明'),
                     'chunk_index': metadata.get('chunk_index', 0),
                     'distance': result.get('distance', 1.0),
-                    'content_preview': result.get('content', '')[:100] + '...' if len(result.get('content', '')) > 100 else result.get('content', '')
-                })
+                    'content': content,  # 完全なコンテンツを保持
+                    'content_preview': content[:100] + '...' if len(content) > 100 else content
+                }
+                sources.append(source_info)
             
             # 6. 結果を構築
             result = {
@@ -806,14 +955,21 @@ class RAGPipeline(CancellableOperation):
             # プロンプト作成
             prompt = self._create_qa_prompt(query, context, conversation_history)
             
-            # ソース情報を準備
-            sources = [
-                {
-                    'filename': result.get('metadata', {}).get('filename', '不明'),
-                    'distance': result.get('distance', 1.0)
+            # ソース情報を準備 (ISSUE-025, ISSUE-026対応)
+            sources = []
+            for result in search_results:
+                metadata = result.get('metadata', {})
+                content = result.get('content', '')
+                
+                source_info = {
+                    'metadata': metadata,  # 完全なメタデータを保持
+                    'filename': metadata.get('document_filename') or metadata.get('filename', '不明'),
+                    'chunk_index': metadata.get('chunk_index', 0),
+                    'distance': result.get('distance', 1.0),
+                    'content': content,
+                    'content_preview': content[:100] + '...' if len(content) > 100 else content
                 }
-                for result in search_results
-            ]
+                sources.append(source_info)
             
             # 最初に検索結果を送信
             yield {

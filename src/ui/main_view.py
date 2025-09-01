@@ -74,7 +74,7 @@ class StreamlitChatManager:
     
     def _display_sources(self, sources: List[Dict[str, Any]]) -> None:
         """
-        ソース情報を表示
+        ソース情報を表示 (ISSUE-025, ISSUE-026対応)
         
         Args:
             sources: ソース情報リスト
@@ -82,28 +82,20 @@ class StreamlitChatManager:
         if not sources:
             return
         
+        # 情報源ファイル名リストを作成 (ISSUE-025対応)
+        source_filenames = self._extract_unique_filenames(sources)
+        
+        # 改善されたexpander表示
         with st.expander(f"📚 参考ソース ({len(sources)}件)", expanded=False):
+            # 情報源サマリーを表示 (ISSUE-025)
+            if source_filenames:
+                st.markdown("**💡 情報源:**")
+                st.markdown(f"🔸 {', '.join(source_filenames)}")
+                st.markdown("---")
+            
+            # 各ソースの詳細情報を表示 (ISSUE-026対応)
             for i, source in enumerate(sources, 1):
-                # ChromaDBから取得したmetadataを確認
-                metadata = source.get('metadata', {})
-                filename = metadata.get('document_filename') or source.get('filename', '不明なファイル')
-                distance = source.get('distance', 0.0)
-                preview = source.get('content_preview', '')
-                
-                # ファイル名表示の改善
-                if filename == '不明なファイル' or filename == '不明':
-                    # メタデータから他の情報を試す
-                    chunk_index = metadata.get('chunk_index', 0)
-                    filename = f"文書 {i} (チャンク{chunk_index})"
-                
-                st.markdown(f"**{i}. {filename}**")
-                
-                # 距離値から類似度への変換を改善
-                similarity_score = self._calculate_similarity_score(distance)
-                st.markdown(f"類似度: {similarity_score}")
-                
-                if preview:
-                    st.markdown(f"内容: {preview}")
+                self._display_single_source(i, source)
                 
                 if i < len(sources):
                     st.markdown("---")
@@ -143,6 +135,170 @@ class StreamlitChatManager:
                 
         except Exception as e:
             return f"計算エラー ({str(e)})"
+    
+    def _extract_unique_filenames(self, sources: List[Dict[str, Any]]) -> List[str]:
+        """
+        ソース情報から重複を除いたファイル名リストを抽出 (ISSUE-025対応)
+        
+        Args:
+            sources: ソース情報リスト
+            
+        Returns:
+            List[str]: 重複を除いたファイル名リスト
+        """
+        filenames = set()
+        
+        for source in sources:
+            metadata = source.get('metadata', {})
+            filename = (
+                metadata.get('document_filename') or 
+                source.get('filename') or 
+                '不明なファイル'
+            )
+            
+            if filename and filename != '不明なファイル':
+                filenames.add(filename)
+        
+        return sorted(list(filenames))
+    
+    def _display_single_source(self, index: int, source: Dict[str, Any]) -> None:
+        """
+        単一のソース情報を詳細表示 (ISSUE-026対応)
+        
+        Args:
+            index: ソース番号
+            source: ソース情報
+        """
+        try:
+            metadata = source.get('metadata', {})
+            distance = source.get('distance', 0.0)
+            content = source.get('content', '')
+            content_preview = source.get('content_preview', content)
+            
+            # ファイル名とチャンク情報
+            filename = (
+                metadata.get('document_filename') or 
+                source.get('filename') or 
+                '不明なファイル'
+            )
+            chunk_index = metadata.get('chunk_index', 0)
+            
+            # 改善されたタイトル表示
+            if filename != '不明なファイル':
+                title = f"**{index}. {filename}**"
+                if chunk_index > 0:
+                    title += f" (セクション {chunk_index + 1})"
+            else:
+                title = f"**{index}. 文書 {index} (チャンク{chunk_index})**"
+            
+            st.markdown(title)
+            
+            # 類似度表示の改善
+            similarity_score = self._calculate_similarity_score(distance)
+            similarity_color = self._get_similarity_color(distance)
+            st.markdown(f"🎯 **関連度:** {similarity_color} {similarity_score}")
+            
+            # 内容プレビューの改善
+            if content_preview:
+                # 内容を適切な長さに調整
+                preview_text = self._format_content_preview(content_preview)
+                st.markdown(f"📝 **内容:** {preview_text}")
+            
+            # 追加情報（ファイルサイズ、作成日等があれば表示）
+            additional_info = self._format_additional_info(metadata)
+            if additional_info:
+                st.markdown(f"ℹ️ **詳細:** {additional_info}")
+                
+        except Exception as e:
+            self.logger.error(f"ソース表示エラー: {e}")
+            st.markdown(f"**{index}.** エラー: ソース情報の表示に失敗しました")
+    
+    def _get_similarity_color(self, distance: float) -> str:
+        """
+        類似度に応じた色コードを取得
+        
+        Args:
+            distance: 距離値
+            
+        Returns:
+            str: 色付き絵文字
+        """
+        try:
+            if distance < 0:
+                return "⚫"  # 異常値
+            elif distance <= 0.3:
+                return "🟢"  # 高い関連性
+            elif distance <= 0.7:
+                return "🟡"  # 中程度の関連性
+            elif distance <= 1.0:
+                return "🟠"  # 低い関連性
+            else:
+                return "🔴"  # 非常に低い関連性
+        except:
+            return "⚫"  # エラー時
+    
+    def _format_content_preview(self, content: str, max_length: int = 120) -> str:
+        """
+        内容プレビューをフォーマット
+        
+        Args:
+            content: 元の内容
+            max_length: 最大文字数
+            
+        Returns:
+            str: フォーマットされた内容
+        """
+        if not content:
+            return "（内容なし）"
+        
+        # 改行を空白に置換
+        content = content.replace('\n', ' ').replace('\r', ' ').strip()
+        
+        if len(content) <= max_length:
+            return f"「{content}」"
+        else:
+            return f"「{content[:max_length]}...」"
+    
+    def _format_additional_info(self, metadata: Dict[str, Any]) -> str:
+        """
+        追加情報をフォーマット
+        
+        Args:
+            metadata: メタデータ
+            
+        Returns:
+            str: フォーマットされた追加情報
+        """
+        info_parts = []
+        
+        # ファイルタイプ
+        file_type = metadata.get('file_type', '')
+        if file_type:
+            info_parts.append(f"形式: {file_type.upper()}")
+        
+        # ファイルサイズ
+        file_size = metadata.get('file_size', 0)
+        if file_size > 0:
+            size_str = self._format_file_size(file_size)
+            info_parts.append(f"サイズ: {size_str}")
+        
+        return " | ".join(info_parts)
+    
+    def _format_file_size(self, size_bytes: int) -> str:
+        """
+        ファイルサイズを読みやすい形式にフォーマット
+        
+        Args:
+            size_bytes: バイト数
+            
+        Returns:
+            str: フォーマットされたサイズ
+        """
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f}{unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f}TB"
     
     def add_user_message(self, message: str) -> None:
         """

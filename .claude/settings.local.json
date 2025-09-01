@@ -19,9 +19,18 @@
       "Bash(pip show:*)",
       "Bash(streamlit run:*)",
       "Bash(grep:*)",
-      "Bash(pip freeze)"
+      "Bash(pip freeze)",
+      "Bash(.venvScriptsactivate)",
+      "Bash(.venv/Scripts/activate)",
+      "Bash(taskkill:*)",
+      "Bash(cmd //c:*)",
+      "Bash(pip install:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\c\\Users\\ID5665\\project\\python"
+    ]
   }
 }
