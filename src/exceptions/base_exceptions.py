@@ -3,7 +3,7 @@
 日本語エラーメッセージとエラーコード体系を提供
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
 from datetime import datetime
 import logging
 
@@ -144,21 +144,21 @@ class ConfigError(LocalKnowledgeAgentError):
 class IndexingConnectionError(IndexingError):
     """インデックスデータベース接続エラー"""
     
-    def __init__(self, message: str = "インデックスデータベースに接続できません", **kwargs):
+    def __init__(self, message: str = "インデックスデータベースに接続できません", **kwargs: Any) -> None:
         super().__init__(message, error_code="IDX_CONNECTION", **kwargs)
 
 
 class IndexingValidationError(IndexingError):
     """インデックス検証エラー"""
     
-    def __init__(self, message: str = "インデックスデータの検証に失敗しました", **kwargs):
+    def __init__(self, message: str = "インデックスデータの検証に失敗しました", **kwargs: Any) -> None:
         super().__init__(message, error_code="IDX_VALIDATION", **kwargs)
 
 
 class DocumentNotFoundError(IndexingError):
     """文書が見つからないエラー"""
     
-    def __init__(self, document_id: str, **kwargs):
+    def __init__(self, document_id: str, **kwargs: Any) -> None:
         message = f"文書が見つかりません (ID: {document_id})"
         details = {"document_id": document_id}
         super().__init__(message, error_code="IDX_DOC_NOT_FOUND", details=details, **kwargs)
@@ -167,14 +167,14 @@ class DocumentNotFoundError(IndexingError):
 class QAModelError(QAError):
     """QAモデル関連エラー"""
     
-    def __init__(self, message: str = "質問応答モデルでエラーが発生しました", **kwargs):
+    def __init__(self, message: str = "質問応答モデルでエラーが発生しました", **kwargs: Any) -> None:
         super().__init__(message, error_code="QA_MODEL", **kwargs)
 
 
 class QATimeoutError(QAError):
     """QA処理タイムアウトエラー"""
     
-    def __init__(self, timeout_seconds: int, **kwargs):
+    def __init__(self, timeout_seconds: int, **kwargs: Any) -> None:
         message = f"質問応答処理がタイムアウトしました ({timeout_seconds}秒)"
         details = {"timeout_seconds": timeout_seconds}
         super().__init__(message, error_code="QA_TIMEOUT", details=details, **kwargs)
@@ -183,21 +183,21 @@ class QATimeoutError(QAError):
 class QAValidationError(QAError):
     """QA入力検証エラー"""
     
-    def __init__(self, message: str = "質問の入力内容が無効です", **kwargs):
+    def __init__(self, message: str = "質問の入力内容が無効です", **kwargs: Any) -> None:
         super().__init__(message, error_code="QA_VALIDATION", **kwargs)
 
 
 class ConfigValidationError(ConfigError):
     """設定検証エラー"""
     
-    def __init__(self, message: str = "設定データの検証に失敗しました", **kwargs):
+    def __init__(self, message: str = "設定データの検証に失敗しました", **kwargs: Any) -> None:
         super().__init__(message, error_code="CFG_VALIDATION", **kwargs)
 
 
 class ConfigFileError(ConfigError):
     """設定ファイル関連エラー"""
     
-    def __init__(self, file_path: str, operation: str = "読み込み", **kwargs):
+    def __init__(self, file_path: str, operation: str = "読み込み", **kwargs: Any) -> None:
         message = f"設定ファイルの{operation}に失敗しました: {file_path}"
         details = {"file_path": file_path, "operation": operation}
         super().__init__(message, error_code="CFG_FILE", details=details, **kwargs)
@@ -206,7 +206,7 @@ class ConfigFileError(ConfigError):
 class ConfigMigrationError(ConfigError):
     """設定マイグレーションエラー"""
     
-    def __init__(self, from_version: str, to_version: str, **kwargs):
+    def __init__(self, from_version: str, to_version: str, **kwargs: Any) -> None:
         message = f"設定のマイグレーションに失敗しました (v{from_version} → v{to_version})"
         details = {"from_version": from_version, "to_version": to_version}
         super().__init__(message, error_code="CFG_MIGRATION", details=details, **kwargs)
@@ -269,7 +269,7 @@ class ErrorMessages:
     CFG_PERMISSION_DENIED = "設定ファイルにアクセスする権限がありません。"
 
 
-def create_error_handler(error_type: str = "general"):
+def create_error_handler(error_type: str = "general") -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     エラーハンドラーデコレータを作成
     
@@ -279,8 +279,8 @@ def create_error_handler(error_type: str = "general"):
     Returns:
         デコレータ関数
     """
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 return func(*args, **kwargs)
             except LocalKnowledgeAgentError:

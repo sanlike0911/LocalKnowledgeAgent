@@ -1,41 +1,39 @@
 [global]
 
-# If false, the file watcher will not watch files.
+# Production mode settings
 developmentMode = false
+dataFrameSerialization = "legacy"
 
 [logger]
 
-# Level of logging: 'error', 'warning', 'info', or 'debug'.
-level = "info"
+# Production logging level
+level = "warning"
 
 [client]
 
-# If false, makes your Streamlit app have a more compact layout.
+# Navigation settings
 showSidebarNavigation = true
+showErrorDetails = false
+toolbarMode = "minimal"
 
 [server]
 
-# The port where the server will listen for client and browser connections.
-# port = 8501
-
-# The IP address where the server will listen for client and browser connections.
+# Production server settings
+port = 8501
 address = "localhost"
-
-# This will be set to true automatically if headless is not set and we are
-# running in a non-interactive environment.
 headless = true
+maxUploadSize = 50
+maxMessageSize = 50
 
-# Connection timeout for the Streamlit server.
-maxUploadSize = 200
-
-# Enable websocket compression.
+# Security settings
 enableWebsocketCompression = true
-
-# Enable CORS.
 enableCORS = false
-
-# Enable XSRF protection.
 enableXsrfProtection = true
+allowRunOnSave = false
+
+# Performance settings
+runOnSave = false
+fileWatcherType = "none"
 
 [browser]
 

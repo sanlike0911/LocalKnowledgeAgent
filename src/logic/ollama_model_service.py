@@ -1,5 +1,6 @@
 """
 ISSUE-022: LLM モデル動的選択機能
+PHASE 6.2: モデル情報表示機能拡張
 
 Ollama API との通信を行い、利用可能なモデル一覧を取得する機能を提供
 設計書仕様に基づいた実装
@@ -7,7 +8,8 @@ Ollama API との通信を行い、利用可能なモデル一覧を取得する
 
 import requests
 from requests.exceptions import ConnectionError, Timeout, HTTPError
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from datetime import datetime
 from src.exceptions.base_exceptions import LocalKnowledgeAgentError
 
 
@@ -128,3 +130,127 @@ class OllamaModelService:
         except OllamaConnectionError:
             # API接続失敗時は False を返す
             return False
+
+    def get_model_info(self, model_name: str) -> Optional[Dict[str, Any]]:
+        """
+        指定されたモデルの詳細情報を取得
+        
+        Args:
+            model_name: 情報を取得するモデル名
+            
+        Returns:
+            Optional[Dict[str, Any]]: モデル情報の辞書、存在しない場合はNone
+        """
+        try:
+            response = requests.get(
+                f"{self.host}/api/tags",
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            models = data.get("models", [])
+            
+            for model in models:
+                if model.get("name") == model_name:
+                    return dict(model)
+                    
+            return None
+            
+        except Exception:
+            # 任意のエラーでNoneを返す
+            return None
+
+    def get_all_models_info(self) -> List[Dict[str, Any]]:
+        """
+        全ての利用可能なモデルの詳細情報を取得
+        
+        Returns:
+            List[Dict[str, Any]]: モデル情報の辞書のリスト
+        """
+        try:
+            response = requests.get(
+                f"{self.host}/api/tags",
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            return list(data.get("models", []))
+            
+        except Exception:
+            # 任意のエラーで空リストを返す
+            return []
+
+    def format_model_size(self, size_bytes: int) -> str:
+        """
+        バイト数を人間が読みやすい形式に変換
+        
+        Args:
+            size_bytes: バイト単位のサイズ
+            
+        Returns:
+            str: 人間が読みやすい形式のサイズ文字列
+        """
+        if size_bytes == 0:
+            return "0 B"
+        
+        units = ["B", "KB", "MB", "GB", "TB"]
+        unit_index = 0
+        size = float(size_bytes)
+        
+        while size >= 1024 and unit_index < len(units) - 1:
+            size /= 1024
+            unit_index += 1
+            
+        if unit_index == 0:
+            return f"{int(size)} {units[unit_index]}"
+        else:
+            return f"{size:.1f} {units[unit_index]}"
+
+    def format_datetime(self, iso_datetime: Optional[str]) -> str:
+        """
+        ISO形式の日時を日本語フォーマットに変換
+        
+        Args:
+            iso_datetime: ISO形式の日時文字列
+            
+        Returns:
+            str: 日本語フォーマットの日時文字列
+        """
+        if not iso_datetime:
+            return "不明"
+            
+        try:
+            # ISO形式のパース（Zタイムゾーン対応）
+            dt = datetime.fromisoformat(iso_datetime.replace('Z', '+00:00'))
+            return dt.strftime("%Y年%m月%d日 %H:%M")
+        except (ValueError, AttributeError):
+            return "不明"
+
+    def is_large_model(self, size_bytes: int, threshold_gb: int = 7) -> bool:
+        """
+        モデルが大容量かどうかを判定
+        
+        Args:
+            size_bytes: モデルのバイトサイズ
+            threshold_gb: 大容量と判定するしきい値（GB）
+            
+        Returns:
+            bool: 大容量モデルの場合True
+        """
+        threshold_bytes = threshold_gb * 1024 * 1024 * 1024
+        return size_bytes > threshold_bytes
+
+    def estimate_memory_usage(self, model_size: int) -> int:
+        """
+        モデルサイズからメモリ使用量を推定
+        
+        Args:
+            model_size: モデルのバイトサイズ
+            
+        Returns:
+            int: 推定メモリ使用量（バイト）
+        """
+        # 一般的にモデルサイズの1.3倍のメモリが必要
+        return int(model_size * 1.3)

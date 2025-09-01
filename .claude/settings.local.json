@@ -17,7 +17,9 @@
       "WebSearch",
       "WebFetch(domain:docs.trychroma.com)",
       "Bash(pip show:*)",
-      "Bash(streamlit run:*)"
+      "Bash(streamlit run:*)",
+      "Bash(grep:*)",
+      "Bash(pip freeze)"
     ],
     "deny": [],
     "ask": []

@@ -433,16 +433,44 @@ class SettingsView:
         try:
             if not self._validate_config_input(ollama_model, embedding_model, chroma_db_path):
                 return
+            
+            # 変更検出
+            model_changed = (
+                current_config.ollama_model != ollama_model.strip() or
+                current_config.embedding_model != embedding_model.strip()
+            )
+            db_path_changed = current_config.chroma_db_path != chroma_db_path.strip()
                 
             updated_config = Config(
                 selected_folders=current_config.selected_folders,
                 chroma_db_path=chroma_db_path.strip(),
                 ollama_model=ollama_model.strip(),
-                embedding_model=embedding_model.strip()
+                embedding_model=embedding_model.strip(),
+                ollama_host=current_config.ollama_host,
+                max_chat_history=current_config.max_chat_history,
+                index_status=current_config.index_status,
+                chroma_collection_name=current_config.chroma_collection_name,
+                max_file_size_mb=current_config.max_file_size_mb,
+                force_japanese_response=current_config.force_japanese_response
             )
             
             self.config_interface.save_config(updated_config)
-            st.success("設定を保存しました。変更を反映するにはアプリケーションを再起動してください。")
+            
+            # 変更内容に応じたメッセージを表示
+            if model_changed and db_path_changed:
+                st.success("✅ 設定を保存しました")
+                st.warning("⚠️ モデル設定とデータベースパスが変更されました。変更を反映するには**アプリケーションを再起動**してください。")
+                st.info("🔄 再起動後、インデックスの再構築が必要な場合があります。")
+            elif model_changed:
+                st.success("✅ 設定を保存しました")
+                st.warning("⚠️ モデル設定が変更されました。変更を反映するには**アプリケーションを再起動**してください。")
+                if current_config.embedding_model != embedding_model.strip():
+                    st.info("🔄 埋め込みモデル変更により、インデックスの再構築を推奨します。")
+            elif db_path_changed:
+                st.success("✅ 設定を保存しました")
+                st.info("ℹ️ データベースパスが変更されました。新しいパスでインデックスを再構築してください。")
+            else:
+                st.success("✅ 設定を保存しました")
             
         except Exception as e:
             raise ConfigError(
@@ -506,6 +534,10 @@ class SettingsView:
                 # 実際にOllamaサーバーから最新情報を取得してステータス表示
                 test_models = self.ollama_service.get_available_models()
                 st.success(f"✅ Ollama接続成功 ({len(test_models)}モデル利用可能)")
+                
+                # 選択されたモデルの詳細情報を表示
+                self._render_model_info(selected_model)
+                
             except OllamaConnectionError:
                 st.warning("⚠️ Ollama接続失敗 - デフォルトモデル一覧を表示")
             
@@ -519,3 +551,68 @@ class SettingsView:
                 value=current_model,
                 help="自動取得に失敗したため、手動でモデル名を入力してください"
             )
+
+    def _render_model_info(self, model_name: str) -> None:
+        """
+        選択されたモデルの詳細情報を表示
+        
+        Args:
+            model_name: 表示するモデル名
+        """
+        try:
+            # モデル詳細情報を取得
+            model_info = self.ollama_service.get_model_info(model_name)
+            
+            if not model_info:
+                st.info(f"ℹ️ モデル '{model_name}' の詳細情報を取得できませんでした")
+                return
+            
+            # モデル情報を表示するコンテナ
+            with st.container():
+                st.markdown("**📊 モデル情報**")
+                
+                # 基本情報を3列で表示
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    # サイズ情報
+                    size_bytes = model_info.get("size", 0)
+                    if size_bytes > 0:
+                        size_human = self.ollama_service.format_model_size(size_bytes)
+                        st.metric("💾 サイズ", size_human)
+                        
+                        # メモリ使用量の推定
+                        estimated_memory = self.ollama_service.estimate_memory_usage(size_bytes)
+                        memory_human = self.ollama_service.format_model_size(estimated_memory)
+                        st.caption(f"推定メモリ使用量: {memory_human}")
+                    else:
+                        st.metric("💾 サイズ", "不明")
+                
+                with col2:
+                    # 更新日時
+                    modified_at = model_info.get("modified_at")
+                    if modified_at:
+                        formatted_date = self.ollama_service.format_datetime(modified_at)
+                        st.metric("📅 更新日時", formatted_date)
+                    else:
+                        st.metric("📅 更新日時", "不明")
+                
+                with col3:
+                    # モデル名
+                    st.metric("🤖 モデル名", model_name)
+                
+                # 大容量モデルの警告表示
+                if size_bytes > 0 and self.ollama_service.is_large_model(size_bytes):
+                    st.warning(
+                        f"⚠️ 大容量モデルです（{self.ollama_service.format_model_size(size_bytes)}）。"
+                        f"実行には十分なメモリ（推定{memory_human}）が必要です。"
+                    )
+                
+                # ダイジェスト情報（省略表示）
+                digest = model_info.get("digest", "")
+                if digest:
+                    short_digest = digest.replace("sha256:", "")[:12] + "..."
+                    st.caption(f"🔑 ダイジェスト: {short_digest}")
+                
+        except Exception as e:
+            st.error(f"モデル情報の取得中にエラーが発生しました: {str(e)}")

@@ -240,6 +240,18 @@ class LocalKnowledgeAgentApp:
                 '''
             }
         )
+        
+        # プロダクションモード設定
+        st.markdown("""
+            <style>
+            /* プロダクションモードのスタイル調整 */
+            .main .block-container { padding-top: 1rem; }
+            .stButton > button { width: 100%; }
+            footer { display: none; }
+            header { display: none; }
+            #MainMenu { display: none; }
+            </style>
+        """, unsafe_allow_html=True)
     
     def _handle_cancellation(self) -> None:
         """キャンセル処理の制御"""
