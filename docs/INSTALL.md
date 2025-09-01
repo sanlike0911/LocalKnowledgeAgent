@@ -163,7 +163,7 @@ cd LocalKnowledgeAgent
 
 ### 2. Python仮想環境作成
 
-#### Windows
+#### Windows(条件)
 
 ```cmd
 # 仮想環境作成
@@ -175,7 +175,7 @@ python -m venv .venv
 # 確認 (プロンプトが (.venv) で始まることを確認)
 ```
 
-#### macOS/Linux
+#### macOS/Linux(条件)
 
 ```bash
 # 仮想環境作成
@@ -232,7 +232,8 @@ streamlit run app.py
 ### 3. ブラウザアクセス
 
 ブラウザで以下にアクセス:
-- **URL**: http://localhost:8501
+
+- **URL**: <http://localhost:8501>
 
 ### 4. 機能テスト
 
@@ -249,11 +250,13 @@ streamlit run app.py
 #### 1. `ModuleNotFoundError`
 
 **エラー例**:
-```
+
+```text
 ModuleNotFoundError: No module named 'streamlit'
 ```
 
 **解決方法**:
+
 ```bash
 # 仮想環境が有効化されているか確認
 # プロンプトが (.venv) で始まっているかチェック
@@ -265,11 +268,13 @@ pip install -r requirements.txt
 #### 2. Ollama接続エラー
 
 **エラー例**:
-```
+
+```text
 [QA-003] Ollama APIへの接続に失敗しました
 ```
 
 **解決方法**:
+
 ```bash
 # Ollamaサーバー起動
 ollama serve
@@ -284,11 +289,13 @@ curl http://localhost:11434/api/tags
 #### 3. モデル不足エラー
 
 **エラー**:
-```
+
+```text
 🚨 必須モデルのセットアップが必要です
 ```
 
 **解決方法**:
+
 ```bash
 # 埋め込みモデルインストール
 ollama pull nomic-embed-text
@@ -300,11 +307,13 @@ ollama pull llama3:8b
 #### 4. ポート競合
 
 **エラー例**:
-```
+
+```text
 Port 8501 is already in use
 ```
 
 **解決方法**:
+
 ```bash
 # 別のポートを使用
 streamlit run app.py --server.port 8502
@@ -317,11 +326,13 @@ streamlit run app.py --server.port 8502
 #### 5. メモリ不足
 
 **エラー**:
-```
+
+```text
 OutOfMemoryError: Unable to allocate memory
 ```
 
 **解決方法**:
+
 1. より軽量なモデルを使用: `gemma2:2b`
 2. 他のアプリケーションを終了してメモリを解放
 3. 設定でファイル数を制限

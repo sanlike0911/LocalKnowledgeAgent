@@ -206,6 +206,43 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# project
-/logs/*
-/data/*
+# LocalKnowledgeAgent Project Specific
+uploads/
+temp/
+backups/
+
+# ChromaDB Data
+data/chroma_db/
+data/config_backups/
+
+# Logs (keep structure but ignore content)
+logs/*.log
+logs/*.json
+logs/critical_alerts/
+logs/error_tracking/
+logs/final_reports/
+logs/performance/
+
+# Temporary files
+*.tmp
+*.temp
+*~
+*.bak
+*.swp
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
