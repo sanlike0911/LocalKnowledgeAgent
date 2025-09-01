@@ -27,6 +27,14 @@ class ChromaDBIndexer(CancellableOperation):
     PDF/TXTファイルを読み込み、ベクトル化してインデックスを作成・管理する
     """
     
+    # 埋め込みモデル次元数マッピング
+    EMBEDDING_DIMENSIONS = {
+        "nomic-embed-text": 768,
+        "mxbai-embed-large": 1024,
+        "all-minilm": 384,
+        "snowflake-arctic-embed": 1024
+    }
+    
     def __init__(
         self,
         collection_name: str = "documents",
@@ -66,12 +74,12 @@ class ChromaDBIndexer(CancellableOperation):
                 details={"db_path": str(db_path), "original_error": str(e)}
             ) from e
         
-        # コレクション取得または作成
+        # 埋め込み関数の初期化（エラーハンドリング強化）
+        self._initialize_embedding_function()
+        
+        # コレクション取得または作成（次元数チェック付き）
         try:
-            self.collection = self.client.get_or_create_collection(
-                name=collection_name,
-                metadata={"description": f"Knowledge base collection: {collection_name}"}
-            )
+            self._initialize_collection_with_dimension_check(collection_name)
         except Exception as e:
             self.logger.error(f"ChromaDBコレクション初期化エラー: {e}", exc_info=True, 
                             extra={"collection_name": collection_name, "db_path": str(db_path)})
@@ -80,9 +88,6 @@ class ChromaDBIndexer(CancellableOperation):
                 error_code="IDX-000",
                 details={"collection_name": collection_name, "db_path": str(db_path)}
             ) from e
-        
-        # 埋め込み関数の初期化（エラーハンドリング強化）
-        self._initialize_embedding_function()
         
         # テキスト分割器の初期化
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -126,6 +131,79 @@ class ChromaDBIndexer(CancellableOperation):
                 extra={"embedding_model": self.embedding_model, "error": str(e)}
             )
             self._embedding_function = None
+    
+    def _initialize_collection_with_dimension_check(self, collection_name: str) -> None:
+        """
+        次元数チェック付きでコレクションを初期化
+        
+        Args:
+            collection_name: コレクション名
+        """
+        try:
+            # 既存コレクションの確認
+            existing_collections = self.client.list_collections()
+            collection_exists = any(c.name == collection_name for c in existing_collections)
+            
+            if collection_exists:
+                # 既存コレクションを取得
+                self.collection = self.client.get_collection(name=collection_name)
+                
+                # 次元数の互換性をチェック
+                compatibility = self.check_embedding_dimension_compatibility()
+                
+                if not compatibility['is_compatible'] and compatibility.get('needs_recreation', False):
+                    self.logger.warning(
+                        f"コレクション次元数不整合を検出、再作成します: {compatibility['error']}"
+                    )
+                    # 不整合の場合はコレクションを削除して再作成
+                    self.client.delete_collection(collection_name)
+                    self._create_new_collection(collection_name)
+                else:
+                    self.logger.info(f"既存コレクションを使用: {collection_name}")
+            else:
+                # 新規コレクションを作成
+                self._create_new_collection(collection_name)
+                
+        except Exception as e:
+            self.logger.error(f"コレクション初期化エラー: {e}")
+            # フォールバック: 基本的なコレクション作成を試行
+            try:
+                self.collection = self.client.get_or_create_collection(
+                    name=collection_name,
+                    metadata={"description": f"Knowledge base collection: {collection_name}"}
+                )
+            except Exception as fallback_error:
+                raise IndexingError(
+                    f"コレクション作成失敗: {fallback_error}",
+                    error_code="IDX-COLLECTION-INIT",
+                    details={"collection_name": collection_name, "original_error": str(e)}
+                ) from fallback_error
+
+    def _create_new_collection(self, collection_name: str) -> None:
+        """
+        新しいコレクションを作成
+        
+        Args:
+            collection_name: コレクション名
+        """
+        expected_dimensions = self.get_model_expected_dimensions()
+        
+        self.collection = self.client.create_collection(
+            name=collection_name,
+            metadata={
+                "description": f"Knowledge base collection: {collection_name}",
+                "embedding_model": self.embedding_model,
+                "dimensions": expected_dimensions
+            }
+        )
+        
+        self.logger.info(
+            f"新しいコレクションを作成: {collection_name}",
+            extra={
+                "embedding_model": self.embedding_model,
+                "dimensions": expected_dimensions
+            }
+        )
     
     def _read_pdf_file(self, file_path: Path) -> str:
         """
@@ -766,6 +844,85 @@ class ChromaDBIndexer(CancellableOperation):
                 details={"document_id": document_id, "original_error": str(e)}
             ) from e
     
+    def get_model_expected_dimensions(self) -> int:
+        """
+        埋め込みモデルの期待次元数を取得
+        
+        Returns:
+            int: 期待される次元数
+        """
+        expected_dims = self.EMBEDDING_DIMENSIONS.get(self.embedding_model)
+        if expected_dims is None:
+            # 未知のモデルの場合は実際にテストして取得
+            try:
+                test_embedding = self._embedding_function.embed_query("test")
+                expected_dims = len(test_embedding)
+                self.logger.warning(
+                    f"未知の埋め込みモデル、実際の次元数を使用: {self.embedding_model} -> {expected_dims}"
+                )
+            except Exception as e:
+                self.logger.error(f"次元数取得失敗: {e}")
+                expected_dims = 384  # デフォルト値
+        
+        return expected_dims
+
+    def update_embedding_model(self, new_embedding_model: str) -> bool:
+        """
+        埋め込みモデルを変更し、必要に応じてコレクションを再作成
+        
+        Args:
+            new_embedding_model: 新しい埋め込みモデル名
+            
+        Returns:
+            bool: 更新成功フラグ
+        """
+        try:
+            old_model = self.embedding_model
+            old_dimensions = self.get_model_expected_dimensions()
+            
+            # モデルを変更
+            self.embedding_model = new_embedding_model
+            
+            # 新しいモデルの埋め込み関数を初期化
+            self._initialize_embedding_function()
+            
+            # 新しいモデルの次元数を取得
+            new_dimensions = self.get_model_expected_dimensions()
+            
+            # 次元数が異なる場合はコレクションを再作成
+            if old_dimensions != new_dimensions:
+                self.logger.info(
+                    f"埋め込みモデル変更による次元数変更を検出: {old_model}({old_dimensions}) -> {new_embedding_model}({new_dimensions})"
+                )
+                
+                # 既存のドキュメント数を確認
+                doc_count = self.collection.count() if self.collection else 0
+                
+                if doc_count > 0:
+                    self.logger.warning(
+                        f"既存の{doc_count}件のドキュメントが削除されます。コレクションを再作成中..."
+                    )
+                
+                # コレクションを再作成
+                self._recreate_collection_with_new_dimensions()
+                
+                return True
+            else:
+                self.logger.info(f"埋め込みモデルを更新: {old_model} -> {new_embedding_model}（次元数変更なし: {new_dimensions}）")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"埋め込みモデル更新エラー: {e}")
+            # エラー時は元のモデルに戻す
+            self.embedding_model = old_model if 'old_model' in locals() else "nomic-embed-text"
+            self._initialize_embedding_function()
+            raise IndexingError(
+                f"埋め込みモデル更新エラー: {e}",
+                error_code="IDX-MODEL-UPDATE",
+                details={"old_model": old_model if 'old_model' in locals() else None, 
+                        "new_model": new_embedding_model, "original_error": str(e)}
+            ) from e
+
     def check_embedding_dimension_compatibility(self) -> dict:
         """
         埋め込み次元数の互換性をチェック (ISSUE-027対応)
@@ -779,13 +936,17 @@ class ChromaDBIndexer(CancellableOperation):
                 'current_dimensions': None,
                 'expected_dimensions': None,
                 'needs_recreation': False,
-                'error': None
+                'error': None,
+                'model_name': self.embedding_model
             }
             
             # 現在の埋め込みモデルから次元数を取得
             try:
-                test_embedding = self._embedding_function.embed_query("test")
-                result['current_dimensions'] = len(test_embedding)
+                if self._embedding_function is None:
+                    result['current_dimensions'] = self.get_model_expected_dimensions()
+                else:
+                    test_embedding = self._embedding_function.embed_query("test")
+                    result['current_dimensions'] = len(test_embedding)
             except Exception as e:
                 result['error'] = f"埋め込みモデルテストに失敗: {e}"
                 result['is_compatible'] = False
@@ -805,7 +966,7 @@ class ChromaDBIndexer(CancellableOperation):
                         if result['current_dimensions'] != result['expected_dimensions']:
                             result['is_compatible'] = False
                             result['needs_recreation'] = True
-                            result['error'] = f"次元数不整合: 現在{result['current_dimensions']} vs 期待{result['expected_dimensions']}"
+                            result['error'] = f"次元数不整合: 現在{result['current_dimensions']}次元({self.embedding_model}) vs コレクション{result['expected_dimensions']}次元"
             else:
                 # コレクションが空の場合は互換性チェック不要
                 result['expected_dimensions'] = result['current_dimensions']
@@ -817,7 +978,8 @@ class ChromaDBIndexer(CancellableOperation):
             error_result = {
                 'is_compatible': False,
                 'error': f"互換性チェックエラー: {e}",
-                'needs_recreation': True
+                'needs_recreation': True,
+                'model_name': self.embedding_model
             }
             self.logger.error("埋め込み次元数互換性チェックに失敗", extra=error_result)
             return error_result
@@ -886,7 +1048,6 @@ class ChromaDBIndexer(CancellableOperation):
             # 新しいコレクションを作成
             self.collection = self.client.create_collection(
                 name=self.collection_name,
-                embedding_function=self._embedding_function,
                 metadata={"hnsw:space": "cosine"}
             )
             

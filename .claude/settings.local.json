@@ -25,7 +25,8 @@
       "Bash(taskkill:*)",
       "Bash(cmd //c:*)",
       "Bash(pip install:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(powershell:*)"
     ],
     "deny": [],
     "ask": [],
