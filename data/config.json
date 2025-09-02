@@ -9,7 +9,7 @@
   "supported_extensions": [
     ".pdf",
     ".txt",
-    ".docx"
+    ".md"
   ],
   "selected_folders": [
     "C:\\workspace\\output"

@@ -257,3 +257,4 @@ fix_*.py
 temp.md
 /test_data/*
 /rag/*
+/logs/*

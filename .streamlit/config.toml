@@ -13,7 +13,7 @@ level = "warning"
 
 # Navigation settings
 showSidebarNavigation = true
-showErrorDetails = false
+showErrorDetails = "none"
 toolbarMode = "minimal"
 
 [server]
@@ -46,19 +46,19 @@ gatherUsageStats = false
 [theme]
 
 # The preset Streamlit theme that your custom theme inherits from.
-base = "light"
+base = "dark"
 
 # Primary accent color for interactive elements.
-primaryColor = "#FF6B6B"
+primaryColor = "#ff4b4b"
 
 # Background color for the main content area.
-backgroundColor = "#FFFFFF"
+backgroundColor = '#0E1117'
 
 # Background color used for the sidebar and most interactive widgets.
-secondaryBackgroundColor = "#F0F2F6"
+secondaryBackgroundColor = "#262730"
 
 # Color used for almost all text.
-textColor = "#262730"
+textColor = "#FAFAFA"
 
 # Font family for all text in the app.
 font = "sans serif"

@@ -28,6 +28,12 @@ class SettingsView:
         try:
             current_config = self.config_interface.load_config()
             
+            # サポート対象の拡張子を整形
+            supported_ext_str = "/".join(
+                [ext.lstrip('.').upper() for ext in current_config.supported_extensions]
+            )
+            help_text = f"{supported_ext_str}ファイルが含まれるフォルダのパスを入力してください"
+
             # フォルダ管理
             st.header("フォルダ管理")
             
@@ -53,7 +59,7 @@ class SettingsView:
             new_folder_path = st.text_input(
                 "新しいフォルダパス", 
                 key="new_folder_path",
-                help="PDF/TXT/DOCX/MDファイルが含まれるフォルダのパスを入力してください",
+                help=help_text,
                 placeholder="例: /Users/username/Documents/data"
             )
             if st.button("フォルダを追加", type="primary"):
