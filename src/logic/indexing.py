@@ -673,6 +673,48 @@ class ChromaDBIndexer(CancellableOperation):
         except IndexingError:
             raise
         except Exception as e:
+            # ChromaDB次元数不一致エラーの検出
+            error_message = str(e)
+            if "Collection expecting embedding with dimension" in error_message:
+                # 次元数不一致エラーメッセージを抽出
+                if "got" in error_message and "expecting" in error_message:
+                    # エラーメッセージから既存の次元数を推定
+                    try:
+                        # "expecting embedding with dimension of X, got Y" パターンを解析
+                        parts = error_message.split("expecting embedding with dimension of ")[1].split(", got ")
+                        expected_dim = int(parts[0])
+                        current_dim = int(parts[1])
+                        
+                        # 次元数から推定される埋め込みモデル名を取得
+                        dimension_model_map = {
+                            768: "nomic-embed-text",
+                            1024: "mxbai-embed-large"
+                        }
+                        
+                        suggested_model = dimension_model_map.get(expected_dim, "不明")
+                        
+                        user_friendly_message = f"異なる埋め込みモデルでコレクションが作成されています。埋め込みモデル「{suggested_model}」に変更してインデックスを作成してください。"
+                        
+                        raise IndexingError(
+                            user_friendly_message,
+                            error_code="IDX-009",
+                            details={
+                                "document_filename": Path(document.file_path).name, 
+                                "expected_dimensions": expected_dim,
+                                "current_dimensions": current_dim,
+                                "suggested_model": suggested_model,
+                                "original_error": error_message
+                            }
+                        ) from e
+                    except (ValueError, IndexError):
+                        # パース失敗時は汎用メッセージ
+                        raise IndexingError(
+                            "異なる埋め込みモデルでコレクションが作成されています。設定で埋め込みモデルを確認し、適切なモデルに変更してインデックスを作成してください。",
+                            error_code="IDX-009",
+                            details={"document_filename": Path(document.file_path).name, "original_error": error_message}
+                        ) from e
+            
+            # その他のエラー
             raise IndexingError(
                 f"ドキュメントインデックス追加エラー: {Path(document.file_path).name} - {e}",
                 error_code="IDX-008",

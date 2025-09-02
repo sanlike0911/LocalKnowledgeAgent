@@ -254,3 +254,60 @@ class OllamaModelService:
         """
         # 一般的にモデルサイズの1.3倍のメモリが必要
         return int(model_size * 1.3)
+
+    def filter_embedding_models(self, installed_models: List[Dict[str, Any]], supported_models: List[str]) -> List[str]:
+        """
+        インストール済みモデルリストを、サポート対象モデルリストでフィルタリングする
+        
+        バージョンタグ（:latest, :1.0等）を自動除去して一致判定を行う
+        
+        Args:
+            installed_models: Ollamaにインストール済みのモデル情報辞書のリスト
+            supported_models: サポート対象の埋め込みモデル名のリスト
+            
+        Returns:
+            List[str]: 両方のリストに存在するモデル名のソート済みリスト（バージョンタグ除去済み）
+        """
+        if not installed_models:
+            return []
+        
+        if not supported_models:
+            return []
+        
+        # インストール済みモデルから名前を抽出（バージョンタグを除去）
+        installed_model_names = set()
+        for model in installed_models:
+            if isinstance(model, dict) and model.get("name"):
+                name = model["name"]
+                # バージョンタグを除去（:以降を削除）
+                base_name = name.split(':')[0] if ':' in name else name
+                if base_name:  # 空文字列でない場合のみ追加
+                    installed_model_names.add(base_name)
+        
+        # サポート対象モデルをセットに変換
+        supported_model_set = set(supported_models)
+        
+        # 両方のリストに存在するモデルのみを抽出（積集合）
+        filtered_models = list(installed_model_names.intersection(supported_model_set))
+        
+        # ソートして返す
+        return sorted(filtered_models)
+    
+    def get_filtered_embedding_models_with_fallback(self, supported_models: List[str]) -> List[str]:
+        """
+        フィルタリング済み埋め込みモデル一覧をフォールバック機能付きで取得
+        
+        API接続に失敗した場合は、サポート対象モデルリストをそのまま返す
+        
+        Args:
+            supported_models: サポート対象の埋め込みモデル名のリスト
+            
+        Returns:
+            List[str]: フィルタリング済みモデル名のリスト（API成功時）またはサポートモデル一覧
+        """
+        try:
+            installed_models = self.get_all_models_info()
+            return self.filter_embedding_models(installed_models, supported_models)
+        except OllamaConnectionError:
+            # API接続失敗時はサポートモデル一覧をそのまま返す
+            return supported_models.copy()

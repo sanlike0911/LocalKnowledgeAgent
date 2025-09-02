@@ -250,6 +250,10 @@ Thumbs.db
 # project: test files
 test_*.py
 debug_*.py
+issue_*.py
+fix_*.py
 
 # project tempfiles
 temp.md
+/test_data/*
+/rag/*

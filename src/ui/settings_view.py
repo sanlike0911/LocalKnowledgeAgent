@@ -226,8 +226,14 @@ class SettingsView:
                         self._handle_index_rebuild(config)
             
             with col2:
-                if st.button("インデックスを削除", type="secondary", use_container_width=True):
-                    self._handle_index_clear(config)
+                # インデックス削除ボタン - エラー状態や作成済み状態で表示
+                deletion_enabled = current_status in ["created", "error"] or index_stats['document_count'] > 0
+                if deletion_enabled:
+                    if st.button("インデックスを削除", type="secondary", use_container_width=True):
+                        self._handle_index_clear(config)
+                else:
+                    st.button("インデックスを削除", type="secondary", disabled=True, use_container_width=True)
+                    st.caption("ℹ️ 削除するインデックスがありません")
                     
         except Exception as e:
             st.error(f"インデックス情報の取得中にエラーが発生しました: {str(e)}")
@@ -247,7 +253,7 @@ class SettingsView:
             # インデックス作成開始 - status を creating に更新
             config.index_status = "creating"
             self.config_interface.save_config(config)
-            st.info("🟡 インデックス作成を開始します...")
+            st.info(f"🟡 インデックス作成を開始します...（埋め込みモデル: {config.embedding_model}）")
             
             # インデックス作成実行
             progress_bar = st.progress(0)
@@ -261,15 +267,15 @@ class SettingsView:
                 progress_bar.progress(50)
                 
                 # 実際のインデックス作成処理
-                with st.spinner("インデックスを作成しています。しばらくお待ちください..."):
+                with st.spinner(f"インデックスを作成しています（{config.embedding_model}）。しばらくお待ちください..."):
                     # ISSUE-027対応: 事前に次元数互換性チェック実行
-                    status_text.text("🔧 埋め込みモデル互換性チェック中...")
+                    status_text.text(f"🔧 埋め込みモデル互換性チェック中...（{config.embedding_model}）")
                     try:
                         self.indexing_interface.recreate_collection_if_incompatible()
                     except Exception as dimension_error:
                         self.logger.warning(f"次元数互換性チェック警告: {dimension_error}")
                     
-                    status_text.text("📄 ドキュメントをインデックス化中...")
+                    status_text.text(f"📄 ドキュメントをインデックス化中...（{config.embedding_model}）")
                     self.indexing_interface.rebuild_index_from_folders(config.selected_folders)
                 
                 progress_bar.progress(90)
@@ -358,21 +364,8 @@ class SettingsView:
                 # LLMモデル名（動的取得）
                 ollama_model = self._render_llm_model_selector(config.ollama_model)
                 
-                # 埋め込みモデル名
-                embedding_model = st.selectbox(
-                    "埋め込み（ベクトル変換）用モデル",
-                    options=[
-                        "nomic-embed-text",
-                        "mxbai-embed-large", 
-                        "all-minilm",
-                        "snowflake-arctic-embed"
-                    ],
-                    index=0 if config.embedding_model == "nomic-embed-text" else 
-                          (1 if config.embedding_model == "mxbai-embed-large" else
-                           (2 if config.embedding_model == "all-minilm" else
-                            (3 if config.embedding_model == "snowflake-arctic-embed" else 0))),
-                    help="ドキュメントのベクトル変換に使用するモデルを選択してください"
-                )
+                # 埋め込みモデル名 - 動的フィルタリング対応
+                embedding_model = self._render_embedding_model_selector(config)
                 
                 st.subheader("データベース設定") 
                 
@@ -610,19 +603,87 @@ class SettingsView:
                 with col3:
                     # モデル名
                     st.metric("🤖 モデル名", model_name)
-                
-                # 大容量モデルの警告表示
-                if size_bytes > 0 and self.ollama_service.is_large_model(size_bytes):
-                    st.warning(
-                        f"⚠️ 大容量モデルです（{self.ollama_service.format_model_size(size_bytes)}）。"
-                        f"実行には十分なメモリ（推定{memory_human}）が必要です。"
-                    )
-                
-                # ダイジェスト情報（省略表示）
-                digest = model_info.get("digest", "")
-                if digest:
-                    short_digest = digest.replace("sha256:", "")[:12] + "..."
-                    st.caption(f"🔑 ダイジェスト: {short_digest}")
-                
+                    
         except Exception as e:
             st.error(f"モデル情報の取得中にエラーが発生しました: {str(e)}")
+
+    def _render_embedding_model_selector(self, config: Config) -> str:
+        """
+        埋め込みモデル選択UIをレンダリング（動的フィルタリング対応）
+        
+        Args:
+            config: 現在の設定オブジェクト
+            
+        Returns:
+            str: 選択された埋め込みモデル名
+        """
+        try:
+            # 設定ファイルからサポート対象モデルリストを取得
+            supported_models = getattr(config, 'supported_embedding_models', [
+                "nomic-embed-text", "mxbai-embed-large", "all-minilm", "snowflake-arctic-embed"
+            ])
+            
+            # Ollamaから動的にフィルタリング済みモデル一覧を取得
+            available_embedding_models = self.ollama_service.get_filtered_embedding_models_with_fallback(
+                supported_models
+            )
+            
+            # 選択肢が空の場合の警告表示とフォールバック
+            if not available_embedding_models:
+                st.warning("⚠️ 利用可能な埋め込みモデルが見つかりません。サポート対象モデルを表示しています。")
+                available_embedding_models = supported_models
+            
+            # 現在のモデルのインデックスを取得
+            current_model = config.embedding_model
+            try:
+                current_index = available_embedding_models.index(current_model) if current_model in available_embedding_models else 0
+            except (ValueError, IndexError):
+                current_index = 0
+                
+            # 動的フィルタリング結果のセレクターをレンダリング
+            selected_embedding_model = st.selectbox(
+                "埋め込み（ベクトル変換）用モデル",
+                options=available_embedding_models,
+                index=current_index,
+                help=f"ドキュメントのベクトル変換に使用するモデルを選択してください。\n"
+                     f"利用可能な埋め込みモデルは「{', '.join(available_embedding_models)}」"
+            )
+            
+            # フィルタリング情報の表示
+            try:
+                # Ollama接続テストと情報表示
+                installed_models = self.ollama_service.get_all_models_info()
+                if installed_models:
+                    total_filtered = len(available_embedding_models)
+                    
+                    st.info(
+                        f"📊 埋め込み（ベクトル変換）の利用可能モデル： {total_filtered}モデル"
+                    )
+                else:
+                    st.warning("⚠️ Ollama接続失敗 - サポートモデル一覧を表示")
+                    
+            except Exception as e:
+                st.warning(f"⚠️ モデル情報取得エラー: {str(e)}")
+                
+            return selected_embedding_model
+            
+        except Exception as e:
+            # 予期しないエラーの場合は従来の静的選択に戻す
+            st.error(f"埋め込みモデル選択での予期しないエラー: {str(e)}")
+            st.warning("静的な選択肢にフォールバックします。")
+            
+            # 従来の静的選択肢
+            fallback_options = ["nomic-embed-text", "mxbai-embed-large", "all-minilm", "snowflake-arctic-embed"]
+            current_model = config.embedding_model
+            
+            try:
+                fallback_index = fallback_options.index(current_model) if current_model in fallback_options else 0
+            except (ValueError, IndexError):
+                fallback_index = 0
+                
+            return st.selectbox(
+                "埋め込み（ベクトル変換）用モデル（フォールバック）",
+                options=fallback_options,
+                index=fallback_index,
+                help="動的選択に失敗したため、静的選択肢を表示しています。"
+            )

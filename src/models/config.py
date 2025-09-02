@@ -62,6 +62,9 @@ class Config:
     upload_folder: str = "./uploads"
     temp_folder: str = "./temp"
     force_japanese_response: bool = True  # 日本語固定回答制御
+    supported_embedding_models: List[str] = field(
+        default_factory=lambda: ["nomic-embed-text", "mxbai-embed-large", "all-minilm", "snowflake-arctic-embed"]
+    )
 
     def __post_init__(self) -> None:
         """データクラス初期化後の検証処理"""
