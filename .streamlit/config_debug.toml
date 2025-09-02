@@ -1,39 +1,37 @@
 [global]
 
-# Production mode settings
-developmentMode = false
-dataFrameSerialization = "legacy"
+# Development mode settings
+developmentMode = true
 
 [logger]
 
-# Production logging level
-level = "warning"
+# Development logging level
+level = "info"
 
 [client]
 
 # Navigation settings
 showSidebarNavigation = true
-showErrorDetails = false
-toolbarMode = "minimal"
+showErrorDetails = true
+toolbarMode = "developer"
 
 [server]
 
-# Production server settings
-port = 8501
+# Development server settings
 address = "localhost"
-headless = true
+headless = false
 maxUploadSize = 50
 maxMessageSize = 50
 
-# Security settings
+# Security settings (relaxed for development)
 enableWebsocketCompression = true
-enableCORS = true
+enableCORS = false
 enableXsrfProtection = true
-allowRunOnSave = false
+allowRunOnSave = true
 
-# Performance settings
-runOnSave = false
-fileWatcherType = "none"
+# Development performance settings
+runOnSave = true
+fileWatcherType = "auto"
 
 [browser]
 

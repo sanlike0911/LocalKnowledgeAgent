@@ -1,7 +1,7 @@
 {
   "ollama_host": "http://localhost:11434",
   "ollama_model": "llama3:8b",
-  "embedding_model": "mxbai-embed-large",
+  "embedding_model": "nomic-embed-text",
   "chroma_db_path": "./data/chroma_db",
   "chroma_collection_name": "knowledge_base",
   "max_chat_history": 50,
@@ -10,12 +10,6 @@
     ".pdf",
     ".txt",
     ".docx"
-  ],
-  "supported_embedding_models": [
-    "nomic-embed-text",
-    "mxbai-embed-large",
-    "all-minilm",
-    "snowflake-arctic-embed"
   ],
   "selected_folders": [
     "C:\\workspace\\output"
