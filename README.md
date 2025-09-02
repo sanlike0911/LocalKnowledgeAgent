@@ -212,6 +212,77 @@ ollama pull nomic-embed-text
 
 ### 開発環境
 
+#### 実行モードの切り替え
+
+**開発モード（ファイル変更を自動検知）:**
+
+Windows:
+```batch
+# 開発モードに切り替え
+scripts\switch_to_dev.bat
+
+# 開発モードで実行
+scripts\run_dev.bat
+```
+
+Linux/Mac:
+```bash
+# 開発モードに切り替え
+./scripts/switch_to_dev.sh
+
+# 開発モードで実行
+./scripts/run_dev.sh
+```
+
+**本番モード（最適化されたパフォーマンス）:**
+
+Windows:
+```batch
+# 本番モードに切り替え
+scripts\switch_to_prod.bat
+
+# 本番モードで実行
+scripts\run_prod.bat
+```
+
+Linux/Mac:
+```bash
+# 本番モードに切り替え
+./scripts/switch_to_prod.sh
+
+# 本番モードで実行
+./scripts/run_prod.sh
+```
+
+**または直接実行:**
+```bash
+# 開発モード
+streamlit run app.py --server.runOnSave=true --server.fileWatcherType=auto --global.developmentMode=true
+
+# 本番モード
+streamlit run app.py --server.runOnSave=false --server.fileWatcherType=none --global.developmentMode=false --server.headless=true
+```
+
+#### 各モードの機能
+
+**🔧 開発モード:**
+- ✨ **ファイル変更の自動検知**: `.py` ファイルの変更を監視
+- 🔄 **自動リロード**: 変更検知時にアプリを自動更新
+- 🐛 **詳細エラー表示**: スタックトレース付きエラー表示
+- 🛠️ **開発者ツールバー**: Streamlit開発者機能有効
+- 📝 **詳細ログ出力**: INFOレベルのログ表示
+- 🌐 **ブラウザ自動起動**: アプリ開始時に自動でブラウザが起動
+
+**🚀 本番モード:**
+- 🔒 **セキュリティ強化**: エラー情報の最小化
+- ⚡ **パフォーマンス最適化**: ファイル監視なし、最小限のログ
+- 🎯 **安定性重視**: デバッグ機能無効、予期しない動作を防止
+- 📊 **最小限UI**: エラー詳細非表示、クリーンな本番環境
+- 💻 **ヘッドレスモード**: サーバー環境での実行に最適化
+- ⚠️ **WARNINGレベルログ**: 重要な問題のみ記録
+
+#### テスト・品質チェック
+
 ```bash
 # 開発用依存関係
 pip install pytest pytest-mock
@@ -229,14 +300,26 @@ mypy src/
 ```
 LocalKnowledgeAgent/
 ├── app.py                    # エントリーポイント
+├── scripts/                  # 実行・切り替えスクリプト
+│   ├── run_dev.bat          # 開発モード起動（Windows）
+│   ├── run_dev.sh           # 開発モード起動（Linux/Mac）
+│   ├── run_prod.bat         # 本番モード起動（Windows）
+│   ├── run_prod.sh          # 本番モード起動（Linux/Mac）
+│   ├── switch_to_dev.bat    # 開発モード切り替え（Windows）
+│   ├── switch_to_dev.sh     # 開発モード切り替え（Linux/Mac）
+│   ├── switch_to_prod.bat   # 本番モード切り替え（Windows）
+│   └── switch_to_prod.sh    # 本番モード切り替え（Linux/Mac）
+├── .streamlit/
+│   ├── config.toml          # 現在のStreamlit設定
+│   └── config.prod.toml     # 本番用設定テンプレート
 ├── src/
-│   ├── ui/                   # Streamlit UI
-│   ├── logic/                # ビジネスロジック
-│   ├── models/               # データモデル
-│   └── utils/                # ユーティリティ
-├── tests/                    # テストスイート
-├── data/                     # データ・設定
-└── docs/                     # ドキュメント
+│   ├── ui/                  # Streamlit UI
+│   ├── logic/               # ビジネスロジック
+│   ├── models/              # データモデル
+│   └── utils/               # ユーティリティ
+├── tests/                   # テストスイート
+├── data/                    # データ・設定
+└── docs/                    # ドキュメント
 ```
 
 ## ライセンス
