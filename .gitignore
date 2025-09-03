@@ -255,6 +255,10 @@ fix_*.py
 
 # project tempfiles
 temp.md
-/test_data/*
-/rag/*
-/logs/*
+test_data
+rag
+logs
+serena
+
+# agents project
+agents

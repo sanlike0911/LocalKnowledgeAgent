@@ -1,159 +1,122 @@
-# 共通開発ルール仕様書
+# CLAUDE.md
 
-計画書バージョン: 1.2
-更新日時: 2025.09.01 - ISSUE-027緊急対応完了
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 概要
+## Project Overview
 
-このファイルはAI Agentにおいて、開発プロジェクトで共通に適用される**開発ルール**を定義します。
-各プロジェクト固有の設計情報は`docs/`ディレクトリに配置してください。
+LocalKnowledgeAgent is a Streamlit-based local RAG (Retrieval-Augmented Generation) system that indexes documents (PDF, TXT, DOCX, Markdown) and provides AI-powered question-answering using LangChain + ChromaDB + Ollama. The system runs entirely locally without external API dependencies.
 
-## システム開発のルール
+## Architecture
 
-### CLAUDE.mdの管理
+The application follows a layered architecture:
 
-- プロジェクトルートに`CLAUDE.md`ファイルを配置し、AI Agentが参照する**知識情報**を記録
-- プロジェクトの概要、アーキテクチャ、依存関係、実行方法は、別ファイル**設計書**(`docs/design-specification.md`)を参照
-- 本ファイルは、最新の変更に合わせて継続的に更新（バージョン管理必須）
+```
+┌─────────────────┐
+│   Streamlit UI  │ ← User Interface (src/ui/)
+├─────────────────┤  
+│   Logic Layer   │ ← Business Logic (src/logic/)
+├─────────────────┤
+│   Data Layer    │ ← ChromaDB + Config (data/)
+├─────────────────┤
+│   LLM Layer     │ ← Ollama Integration
+└─────────────────┘
+```
 
-### タスク管理のルール
+### Key Components
 
-- **すべてのタスクはTodoWriteツールで管理必須**
-- **タスク開始時：status を "in_progress" に変更**
-- **タスク完了時：status を "completed" に即座変更**
-- **TodoWrite使用なしでの開発は禁止**
-- 機能実装前に明確な計画を立案し、実装手順を**開発計画書**として文書化（`docs/project-plan.md`）すること
-- 複雑なタスクは小さなステップに分割し、段階的に実装
+- **app.py**: Main application entry point containing `LocalKnowledgeAgentApp` class
+- **src/logic/qa.py**: Core RAG pipeline with `QAService`, `RAGPipeline`, `OllamaQAEngine`
+- **src/logic/indexing.py**: Document indexing via `ChromaDBIndexer`
+- **src/ui/**: Streamlit interface components (main_view, settings_view, navigation)
+- **tests/**: Comprehensive test suite organized by module
 
-### ファイル構成規則
+## Common Development Commands
 
-- プロジェクト構造は標準的なディレクトリ構成に従う
+### Application Execution
+```bash
+# Standard application startup
+streamlit run app.py
 
-  ```text
-  project/
-  ├── CLAUDE.md                    # AI Agent用の指示書
-  ├── README.md                    # プロジェクト説明
-  ├── requirements.txt             # 依存関係（Python）
-  ├── pyproject.toml               # プロジェクト設定（Poetry使用時）
-  ├── .env.example                 # 環境変数テンプレート
-  ├── src/                        # ソースコード
-  ├── tests/                      # テストコード
-  ├── docs/                       # ドキュメント
-  │   ├── design-specification.md  # **設計書**: 必須 この設計書に従って開発すること
-  │   └── project-plan.md         # **開発計画書**: 必須 この開発計画に従って開発すること
-  └── scripts/                    # スクリプト類
-  ```
+# Development mode (auto-reload, detailed errors)
+streamlit run app.py --server.runOnSave=true --server.fileWatcherType=auto --global.developmentMode=true
 
-### 環境設定
+# Production mode (optimized performance)  
+streamlit run app.py --server.runOnSave=false --server.fileWatcherType=none --global.developmentMode=false --server.headless=true
+```
 
-- 開発は仮想環境でおこなうことを必須とし、開発PCの環境を汚さないこと
-- Pythonプロジェクトは仮想環境「.venv」を必須とする
-- 開発環境の統一化のため`.devcontainer`または`docker-compose.yml`を提供
-- 環境変数は`.env`ファイルで管理し、`.env.example`でテンプレートを提供
-- 依存関係は明確に定義し、バージョン固定を行う
+### Testing
+```bash
+# Run all tests
+pytest
 
-<!-- ### 開発ルール遵守チェック
+# Run specific test module
+pytest tests/logic/test_qa.py
 
-- **コミット前：テストが存在することを確認**
-- **プルリクエスト：TodoWrite履歴の確認**
-- **CI/CD：TDDサイクルの検証**
+# Run with verbose output
+pytest -v
+```
 
-### 自動化とCI/CD
+### Environment Setup
+```bash
+# Create and activate virtual environment (Windows)
+python -m venv .venv
+.venv\Scripts\activate
 
-- pre-commitフックを設定し、コミット前の品質チェックを自動化
-- GitHub ActionsまたはGitLab CIでCI/CDパイプラインを構築
-- テスト実行、コード品質チェック、デプロイを自動化 -->
+# Install dependencies
+pip install -r requirements.txt
+```
 
-### ドキュメント管理
+### Ollama Management
+```bash
+# Check Ollama status and installed models
+ollama list
 
-- コード変更時は関連ドキュメントも同時に更新
-- API仕様はOpenAPI/Swagger形式で管理
-- 設計書、操作手順書は`docs/`ディレクトリで一元管理
+# Install required models
+ollama pull llama3:8b
+ollama pull nomic-embed-text
 
-## 開発体制
+# Start Ollama server (if not running)
+ollama serve
+```
 
-### 役割分担
+## Development Guidelines
 
-プロジェクトの**開発計画**は、プロダクトマネージャによってタスクを担当者で分割する
+### Code Conventions
+- **Naming**: snake_case for functions/variables, PascalCase for classes, UPPER_SNAKE_CASE for constants
+- **Type Hints**: Required for all function parameters and return values
+- **Docstrings**: Required for all public functions and classes (Japanese comments for complex logic)
+- **Testing**: TDD approach using pytest with pytest-mock
 
-| 役割                     | 主な責務                                               |
-| ------------------------ | ------------------------------------------------------ |
-| プロダクトマネージャー   | 全体管理、仕様決定、品質統括、デザインレビュー         |
-| バックエンドエンジニア   | サーバーサイドの開発を担当し、システム全体の動作支える |
-| フロントエンドエンジニア | ユーザーが直接操作する画面やUI/UX部分を開発する）      |
-| QAエンジニア             | テスト戦略策定、品質保証、テスト作成・実施             |
+### Task Management
+- **Mandatory**: Use TodoWrite tool for all development tasks
+- **Workflow**: Mark tasks "in_progress" when starting, "completed" immediately upon finishing
+- **Planning**: Break complex tasks into smaller, manageable steps
 
-## コーディング規約
+### Required Dependencies
+- Python 3.9+ (currently 3.11.13)
+- Streamlit 1.49+
+- LangChain 0.3+, ChromaDB 1.0+, Ollama 0.5+
+- pytest 8.4+ for testing
 
-### TDD実装手順（**必須：twada tdd**）
+### Configuration Files
+- **data/config.json**: Application configuration (Ollama settings, folder paths)
+- **.streamlit/config.toml**: Streamlit UI configuration (production-optimized)
+- **pyproject.toml**: Project metadata and build configuration
 
-1. **機能仕様を明確化**
-2. **テストケース作成（Red フェーズ）**
-3. **最小実装でテスト通過（Green フェーズ）**
-4. **リファクタリング（Refactor フェーズ）**
-5. **使用ツール：pytest（Python）、jest（JavaScript）**
+## Task Completion Checklist
 
-### 開発手法
+When completing development tasks:
 
-- **継続的インテグレーション（CI）** を導入し、コードプッシュ時の自動テスト実行を行う
-- **コードレビュー** を必須とし、最低1名以上のレビューを経てマージする
+1. **Verification**: Ensure `streamlit run app.py` starts successfully
+2. **Testing**: Run `pytest` and verify all tests pass  
+3. **Ollama**: Confirm `ollama list` shows required models
+4. **Dependencies**: Update `requirements.txt` if new packages added
+5. **Type Safety**: Verify type hints are complete and accurate
 
-### コード品質
+## Project Structure Notes
 
-- **命名規則:**
-  - 関数・変数名：snake_case（例：`calculate_string_length`）
-  - クラス名：PascalCase（例：`StringLengthCalculator`）
-  - 定数：UPPER_SNAKE_CASE（例：`MAX_STRING_LENGTH`）
-- **コメント:**
-  - 複雑なロジックには日本語でコメントを記述
-  - 関数・クラスにはdocstringを記述
-- **型ヒント:** すべての関数の引数・戻り値に型ヒントを付与
-- **静的解析:** flake8、mypy、black等のツールを導入し、コード品質を保持
-
-### エラーハンドリング
-
-- **例外処理:** 適切な例外クラスを使用し、具体的なエラーメッセージを設定
-- **ログ出力:** 構造化ログ（JSON形式）でタイムスタンプ、ログレベル、メッセージを記録
-- **リトライ機構:** 外部API呼び出しには適切なリトライ機構を実装
-
-### ユーザーエクスペリエンス
-
-- **進捗表示:** 時間のかかる処理（3秒以上）は進捗状況を表示し、ユーザーに処理状況を伝える
-- **処理結果表示:** すべてのユーザー操作に対して、処理結果（成功・失敗とその理由）を明確に表示
-- **フィードバック:** ユーザーアクションに対する即座のレスポンス（ボタン押下時の視覚的変化等）を提供
-- **エラーメッセージ:** ユーザーが理解しやすい日本語でエラー内容と対処方法を表示
-- **操作ガイダンス:** 複雑な操作には適切なヘルプテキストや操作手順を表示
-
-### セキュリティ
-
-- **入力検証:** すべてのユーザー入力に対してサニタイズとバリデーションを実施
-- **認証・認可:** 必要に応じてJWT等を使用した認証機構を実装
-- **CORS設定:** 適切なオリジン制限を設定
-- **レート制限:** API呼び出し頻度制限を実装
-- **セキュリティヘッダー:** HTTPS強制、XSS対策等のセキュリティヘッダーを設定
-
-### パフォーマンス
-
-- **データベース:** インデックスを適切に設定し、N+1問題を回避
-- **キャッシュ:** Redis等を使用した適切なキャッシュ戦略を実装
-- **非同期処理:** I/O集約的な処理には非同期処理を採用
-
-### 保守性
-
-- **依存関係管理:** requirements.txt または poetry.lock で依存関係を固定
-- **設定管理:** 環境変数を使用し、設定ファイルで環境別設定を分離
-- **ドキュメント:** README.md、API仕様書を最新状態に保持
-
-<!-- ## AI Agentへの具体的な指示（プロンプト例）
-
-```prompt
-あなたは指示書の【@CLAUDE.md】と、設計書の【@docs/design-specification.md】を知識ベースにソフトウェア開発してください。
-開発計画がない場合は【@docs/project-plan.md】に、上記の知識を基に開発計画を作成してから開発を始めてください。
-
-開発計画の【MVP】タスクから始めてください。
-開発計画は【project-plan.md】を理解してから、【XXX】の開発を始めてください。
-
-あなたは指示書の【@CLAUDE.md】と、設計書の【@docs/design-specification.md】を知識ベースにソフトウェア開発してください。
-設計書の【△v3.1】の追加機能を理解し、開発計画【@docs/project-plan.md】を作成してください。
-
-``` -->
+- The application uses a service-oriented architecture with clear separation between UI, business logic, and data layers
+- ChromaDB handles vector storage and retrieval for RAG functionality
+- Ollama integration provides local LLM inference without external API calls
+- Security features include input validation, CORS configuration, and XSS protection
+- The system is optimized for Japanese language processing and responses
