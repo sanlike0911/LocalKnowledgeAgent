@@ -251,12 +251,12 @@ class TestConfigModel:
         """拡張子サポート判定が正しく動作することをテスト"""
         from src.models.config import Config
 
-        config = Config(supported_extensions=[".pdf", ".txt"])
+        config = Config(supported_extensions=[".pdf", ".txt", ".md"])
 
         assert config.is_extension_supported(".pdf") is True
         assert config.is_extension_supported("pdf") is True
         assert config.is_extension_supported(".PDF") is True
-        assert config.is_extension_supported(".docx") is False
+        assert config.is_extension_supported(".md") is True
         assert config.is_extension_supported("exe") is False
 
     def test_config_get_max_file_size_bytes(self) -> None:

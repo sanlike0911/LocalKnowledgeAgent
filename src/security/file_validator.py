@@ -19,7 +19,7 @@ class FileValidator:
     ALLOWED_MIME_TYPES = {
         'application/pdf': ['.pdf'],
         'text/plain': ['.txt'],
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
+        'text/plain': ['.md']
     }
     
     # 最大ファイルサイズ（50MB）

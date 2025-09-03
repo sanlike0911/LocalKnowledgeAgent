@@ -126,7 +126,7 @@ class EnvironmentValidator:
             # ドキュメント処理設定
             "max_file_size_mb": self.get_int_env("MAX_FILE_SIZE_MB", 50),
             "supported_extensions": self.get_optional_env(
-                "SUPPORTED_EXTENSIONS", ".pdf,.txt,.docx"
+                "SUPPORTED_EXTENSIONS", ".pdf,.txt,.md"
             ).split(","),
             # アプリケーション設定
             "app_debug": self.get_bool_env("APP_DEBUG", False),

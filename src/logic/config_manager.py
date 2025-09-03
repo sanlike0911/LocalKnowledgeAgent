@@ -58,7 +58,7 @@ class ConfigManager(CancellableOperation):
             "chroma_collection_name": "knowledge_base",
             "max_chat_history": 50,
             "max_file_size_mb": 50,
-            "supported_extensions": [".pdf", ".txt", ".docx"],
+            "supported_extensions": [".pdf", ".txt", ".md"],
             "selected_folders": [],
             "index_status": "not_created",
             "app_debug": False,

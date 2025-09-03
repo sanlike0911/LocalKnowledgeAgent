@@ -14,11 +14,16 @@ from src.exceptions.base_exceptions import (
 from src.utils.structured_logger import get_logger
 
 class SettingsView:
-    def __init__(self, config_interface: ConfigManager, indexing_interface: ChromaDBIndexer):
+    def __init__(self, config_interface: ConfigManager, indexing_interface: Optional[ChromaDBIndexer] = None):
         self.config_interface = config_interface
-        self.indexing_interface = indexing_interface
         self.ollama_service = OllamaModelService()
         self.logger = get_logger(__name__)
+        # indexing_interfaceがNoneの場合、設定から初期化
+        if indexing_interface is None:
+            config = self.config_interface.load_config()
+            self.indexing_interface = ChromaDBIndexer(collection_name=config.chroma_collection_name, config=config)
+        else:
+            self.indexing_interface = indexing_interface
 
     @create_error_handler("config")
     def render(self) -> None:

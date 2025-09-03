@@ -448,7 +448,7 @@ def filter_embedding_models(installed_models: list, supported_models: list) -> l
 - [x] **ISSUE-025(🟡 緊急度: 中)**: メイン画面の情報源表示改善（ファイル名表示）
 - [x] **ISSUE-026(🟡 緊急度: 中)**: メイン画面の参考ソース表示改善（具体的情報提示）
 - [x] **ISSUE-027(🔴 緊急度: 高)**: 埋め込みモデル変更後のインデックス次元数不整合エラー
-- [ ] **ISSUE-028(🔴 優先度: 高)**: Markdown (.md) ファイル対応
+- [x] **ISSUE-028(🔴 優先度: 高)**: Markdown (.md) ファイル対応
 - [ ] **ISSUE-029(🔴 優先度: 高)**: Office系ドキュメント対応（Word, Excel, PowerPoint）
 - [ ] **ISSUE-030(🟡 緊急度: 中)**: 拡張ドキュメント形式の品質テスト
 - [x] **ISSUE-031(🔴 優先度: 高)**: チャット入力補助機能（プロンプト履歴表示）（🔴中止：実現不可）

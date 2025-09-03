@@ -53,7 +53,7 @@ class Config:
     max_chat_history: int = 50
     max_file_size_mb: int = 50
     supported_extensions: List[str] = field(
-        default_factory=lambda: [".pdf", ".txt", ".docx"]
+        default_factory=lambda: [".pdf", ".txt", ".md"]
     )
     selected_folders: List[str] = field(default_factory=list)
     index_status: str = "not_created"  # 'not_created', 'creating', 'created', 'error'
@@ -151,7 +151,7 @@ class Config:
             max_chat_history=data.get("max_chat_history", 50),
             max_file_size_mb=data.get("max_file_size_mb", 50),
             supported_extensions=data.get(
-                "supported_extensions", [".pdf", ".txt", ".docx"]
+                "supported_extensions", [".pdf", ".txt", ".md"]
             ),
             selected_folders=data.get("selected_folders", []),
             index_status=data.get("index_status", "not_created"),

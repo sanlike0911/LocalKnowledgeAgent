@@ -66,6 +66,7 @@ class LocalKnowledgeAgentApp:
                 self.indexer = ChromaDBIndexer(
                     collection_name=config.chroma_collection_name,
                     db_path=config.chroma_db_path,
+                    supported_extensions=config.supported_extensions,
                     embedding_model=config.embedding_model
                 )
                 

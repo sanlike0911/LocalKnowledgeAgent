@@ -1,7 +1,7 @@
 {
   "ollama_host": "http://localhost:11434",
   "ollama_model": "llama3:8b",
-  "embedding_model": "nomic-embed-text",
+  "embedding_model": "mxbai-embed-large",
   "chroma_db_path": "./data/chroma_db",
   "chroma_collection_name": "knowledge_base",
   "max_chat_history": 50,
@@ -12,7 +12,7 @@
     ".md"
   ],
   "selected_folders": [
-    "C:\\workspace\\output"
+    "C:\\workspace\\output_md"
   ],
   "index_status": "created",
   "app_debug": false,

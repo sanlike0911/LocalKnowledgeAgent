@@ -39,6 +39,7 @@ class ChromaDBIndexer(CancellableOperation):
         self,
         collection_name: str = "documents",
         db_path: str = "./data/chroma_db",
+        supported_extensions: List[str] = None,
         embedding_model: str = "nomic-embed-text"
     ):
         """
@@ -47,12 +48,14 @@ class ChromaDBIndexer(CancellableOperation):
         Args:
             collection_name: コレクション名
             db_path: データベースパス
+            supported_extensions: サポートファイルの拡張子
             embedding_model: 埋め込みモデル名 (Ollama)
         """
         super().__init__(f"ChromaDB Indexer ({collection_name})")
-        
+
         self.collection_name = collection_name
         self.db_path = Path(db_path)
+        self.supported_extensions = supported_extensions
         self.embedding_model = embedding_model
         self.logger = get_logger(__name__)
         
@@ -67,11 +70,11 @@ class ChromaDBIndexer(CancellableOperation):
                 )
             )
         except Exception as e:
-            self.logger.error(f"ChromaDBクライアント初期化エラー: {e}", exc_info=True, extra={"db_path": str(db_path)})
+            self.logger.error(f"ChromaDBクライアント初期化エラー: {e}", exc_info=True, extra={"db_path": str(self.db_path)})
             raise IndexingError(
                 f"ChromaDBクライアント初期化エラー: {e}",
                 error_code="IDX-000",
-                details={"db_path": str(db_path), "original_error": str(e)}
+                details={"db_path": str(self.db_path), "original_error": str(e)}
             ) from e
         
         # 埋め込み関数の初期化（エラーハンドリング強化）
@@ -79,14 +82,14 @@ class ChromaDBIndexer(CancellableOperation):
         
         # コレクション取得または作成（次元数チェック付き）
         try:
-            self._initialize_collection_with_dimension_check(collection_name)
+            self._initialize_collection_with_dimension_check(self.collection_name)
         except Exception as e:
             self.logger.error(f"ChromaDBコレクション初期化エラー: {e}", exc_info=True, 
-                            extra={"collection_name": collection_name, "db_path": str(db_path)})
+                            extra={"collection_name": self.collection_name, "db_path": str(self.db_path)})
             raise IndexingError(
                 f"ChromaDBコレクション初期化エラー: {e}",
                 error_code="IDX-000",
-                details={"collection_name": collection_name, "db_path": str(db_path)}
+                details={"collection_name": self.collection_name, "db_path": str(self.db_path)}
             ) from e
         
         # テキスト分割器の初期化
@@ -101,9 +104,10 @@ class ChromaDBIndexer(CancellableOperation):
         self.file_validator = FileValidator()
         
         self.logger.info(f"ChromaDBIndexer初期化完了", extra={
-            "collection_name": collection_name,
-            "db_path": str(db_path),
-            "embedding_model": embedding_model
+            "collection_name": self.collection_name,
+            "db_path": str(self.db_path),
+            "supported_extensions": self.supported_extensions,
+            "embedding_model": self.embedding_model
         })
     
     def _initialize_embedding_function(self) -> None:
@@ -475,8 +479,6 @@ class ChromaDBIndexer(CancellableOperation):
                 content = self._read_txt_file(file_path)
             elif file_ext == ".md":
                 content = self._read_markdown_file(file_path)  # Markdownファイル専用読み込み
-            elif file_ext == ".docx":
-                content = self._read_docx_file(file_path)
             else:
                 self.logger.warning(f"サポートされていないファイル形式: {file_ext}")
                 return None
@@ -1196,11 +1198,12 @@ class ChromaDBIndexer(CancellableOperation):
         try:
             # サポート対象ファイルを収集
             supported_extensions = ['*.pdf', '*.txt']
+            supported_extensions = [f"*{ext}" for ext in self.supported_extensions]
             file_paths = []
             
             for ext in supported_extensions:
                 file_paths.extend(directory_path.glob(f"**/{ext}"))
-            
+
             if not file_paths:
                 self.logger.warning(f"処理対象ファイルが見つかりません: {directory_path}")
                 return []
@@ -1279,7 +1282,7 @@ class ChromaDBIndexer(CancellableOperation):
                 folder_path = Path(folder_path_str)
                 if folder_path.is_dir():
                     # サポート対象ファイルを収集 (rebuild_from_directoryと同じロジック)
-                    supported_extensions = ['*.pdf', '*.txt']
+                    supported_extensions = [f"*{ext}" for ext in self.supported_extensions]
                     for ext in supported_extensions:
                         total_files_to_process += len(list(folder_path.glob(f"**/{ext}")))
                 else:
@@ -1302,7 +1305,7 @@ class ChromaDBIndexer(CancellableOperation):
                     self.logger.info(f"フォルダ処理中: {folder_path_str}")
                     
                     # rebuild_from_directoryのロジックをここに統合
-                    supported_extensions = ['*.pdf', '*.txt']
+                    supported_extensions = [f"*{ext}" for ext in self.supported_extensions]
                     file_paths = []
                     for ext in supported_extensions:
                         file_paths.extend(folder_path.glob(f"**/{ext}"))

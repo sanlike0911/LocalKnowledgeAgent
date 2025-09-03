@@ -461,11 +461,7 @@ class MainView(CancellableOperation):
             
             # ChromaDBインデクサーが渡されていない場合のみ初期化
             if self.indexer is None:
-                self.indexer = ChromaDBIndexer(
-                    collection_name="knowledge_base", 
-                    db_path=config.chroma_db_path,
-                    embedding_model="nomic-embed-text"
-                )
+                self.indexer = ChromaDBIndexer(collection_name=config.chroma_collection_name, config=config)
             
             # RAGパイプライン初期化
             self.rag_pipeline = RAGPipeline(
